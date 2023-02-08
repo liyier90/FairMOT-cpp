@@ -40,6 +40,7 @@ set(SOURCES
     src/main.cpp
     src/Decoder.cpp
     src/FairMot.cpp
+    src/STrack.cpp
     src/Utils.cpp
 )
 

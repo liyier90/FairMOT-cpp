@@ -3,9 +3,8 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <sstream>
-
 #include <opencv2/opencv.hpp>
+#include <sstream>
 
 #include "FairMot.hpp"
 #include "Filesystem.hpp"
@@ -64,7 +63,7 @@ int ProcessVideo(const fs::path &rVideoPath) {
     ++num_frames;
     if (num_frames % 20 == 0) {
       std::cout << static_cast<double>(num_frames) / total_elapsed.count()
-          << " fps" << std::endl;
+                << " fps" << std::endl;
     }
 
     if (cv::waitKey(1) > 0) {
@@ -74,6 +73,6 @@ int ProcessVideo(const fs::path &rVideoPath) {
   cap.release();
   std::stringstream cmd_stream;
   cmd_stream << "ffmpeg -y -f image2 -i " << output_dir / "%05d.jpg"
-      << " -c:v copy " << output_dir / "results.mp4";
+             << " -c:v copy " << output_dir / "results.mp4";
   return std::system(cmd_stream.str().c_str());
 }
