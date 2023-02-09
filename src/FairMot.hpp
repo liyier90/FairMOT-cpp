@@ -7,13 +7,16 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "Decoder.hpp"
+#include "STrack.hpp"
 
 namespace fairmot {
 class FairMot {
  public:
-  FairMot(const std::string &rModelPath, int maxPerImage);
+  FairMot(const std::string &rModelPath, const double frameRate,
+          const int maxPerImage, const int trackBuffer);
 
   ~FairMot();
 
@@ -36,8 +39,13 @@ class FairMot {
   const int mInputHeight;
   const int mInputWidth;
   const double mScoreThreshold;
+  const int mMaxTimeLost;
 
   int mFrameId;
+
+  std::vector<STrack> mLostStracks;
+  std::vector<STrack> mTrackedStracks;
+  std::vector<STrack> mRemoveStracks;
 };
 }  // namespace fairmot
 
