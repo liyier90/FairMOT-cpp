@@ -18,21 +18,25 @@ class FairMot {
   FairMot(const std::string &rModelPath, const double frameRate,
           const int maxPerImage, const int trackBuffer);
 
+  FairMot(const FairMot &) = delete;
+
   ~FairMot();
 
-  void Track(const cv::Mat &rImage);
+  FairMot operator=(const FairMot &) = delete;
 
   std::pair<torch::Tensor, torch::Tensor> Predict(const cv::Mat &rPaddedImage,
                                                   const cv::Mat &rImage);
 
-  void Update(const torch::Tensor &rDetections,
-              const torch::Tensor &rEmbeddings);
+  void Track(const cv::Mat &rImage);
+
+  std::vector<STrack> Update(const torch::Tensor &rDetections,
+                             const torch::Tensor &rEmbeddings);
 
  private:
   cv::Mat Preprocess(cv::Mat image);
 
   torch::jit::script::Module mModel;
-  torch::Device *mpDevice;
+  torch::Device *mpDevice = nullptr;
 
   Decoder mDecoder;
 

@@ -3,13 +3,17 @@
 #include <torch/torch.h>
 #include <torchvision/vision.h>
 
+#include <algorithm>
 #include <cassert>
+#include <cstring>
 #include <fstream>
+#include <iterator>
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "DataType.hpp"
 #include "Matching.hpp"
 #include "STrack.hpp"
 #include "Utils.hpp"
@@ -23,7 +27,10 @@ FairMot::FairMot(const std::string &rModelPath, const double frameRate,
       mInputWidth{864},
       mScoreThreshold{0.4},
       mMaxTimeLost{static_cast<int>(frameRate / 30.0 * trackBuffer)},
-      mFrameId{0} {
+      mFrameId{0},
+      mLostStracks(),
+      mTrackedStracks(),
+      mRemoveStracks() {
   torch::DeviceType device_type;
   if (torch::cuda::is_available()) {
     std::cout << "Using CUDA." << std::endl;
@@ -38,14 +45,6 @@ FairMot::FairMot(const std::string &rModelPath, const double frameRate,
 }
 
 FairMot::~FairMot() { delete mpDevice; }
-
-void FairMot::Track(const cv::Mat &rImage) {
-  auto padded_image = this->Preprocess(rImage);
-  torch::Tensor detections;
-  torch::Tensor embeddings;
-  std::tie(detections, embeddings) = this->Predict(padded_image, rImage);
-  this->Update(detections.contiguous(), embeddings.contiguous());
-}
 
 std::pair<torch::Tensor, torch::Tensor> FairMot::Predict(
     const cv::Mat &rPaddedImage, const cv::Mat &rImage) {
@@ -79,9 +78,22 @@ std::pair<torch::Tensor, torch::Tensor> FairMot::Predict(
   return std::make_pair(detections, id_feature);
 }
 
-void FairMot::Update(const torch::Tensor &rDetections,
-                     const torch::Tensor &rEmbeddings) {
+void FairMot::Track(const cv::Mat &rImage) {
+  auto padded_image = this->Preprocess(rImage);
+  torch::Tensor detections;
+  torch::Tensor embeddings;
+  std::tie(detections, embeddings) = this->Predict(padded_image, rImage);
+  const auto output_stracks =
+      this->Update(detections.contiguous(), embeddings.contiguous());
+}
+
+std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
+                                    const torch::Tensor &rEmbeddings) {
   ++mFrameId;
+  if (mFrameId == 3) {
+    assert(false);
+  }
+  std::cout << "=== " << mFrameId << std::endl;
   std::vector<STrack> activated_stracks;
   std::vector<STrack> refind_stracks;
   std::vector<STrack> lost_stracks;
@@ -96,12 +108,13 @@ void FairMot::Update(const torch::Tensor &rDetections,
     const auto embedding_size = rEmbeddings.size(1);
     // Detections is a list of (x1, y1, x2, y2, score)
     for (int i = 0; i < num_detections; ++i) {
-      std::vector<float> xyxy(rDetections[i].data_ptr<float>(),
-                              rDetections[i].data_ptr<float>() + 4);
+      BBox xyxy;
+      memcpy(xyxy.data(), rDetections[i].data_ptr<float>(), sizeof(float) * 4);
       const auto score = rDetections[i][4].item<float>();
-      std::vector<float> embedding(
-          rEmbeddings[i].data_ptr<float>(),
-          rEmbeddings[i].data_ptr<float>() + embedding_size);
+      Embedding embedding;
+      memcpy(embedding.data(), rEmbeddings[i].data_ptr<float>(),
+             sizeof(float) * 128);
+
       STrack strack(STrack::rXyxyToTlwh(xyxy), score, embedding);
       detections.push_back(strack);
     }
@@ -126,8 +139,10 @@ void FairMot::Update(const torch::Tensor &rDetections,
   // Step 2: First association, with embedding
   // Combining tracked_stracks and mLostStracks
   strack_pool = strack_util::CombineStracks(tracked_stracks, mLostStracks);
+  std::cout << "strack_pool " << strack_pool << std::endl;
   // Predict the current location with KF
   STrack::MultiPredict(strack_pool);
+  std::cout << "MultiPredict" << std::endl;
 
   // The dists is a matrix of distances of the detection with the tracks
   // in strack_pool
@@ -136,12 +151,14 @@ void FairMot::Update(const torch::Tensor &rDetections,
   auto num_cols = 0;
   matching::EmbeddingDistance(strack_pool, detections, dists, num_rows,
                               num_cols);
+  matching::FuseMotion(STrack::kSharedKalman, strack_pool, detections, dists);
 
   std::vector<std::vector<int>> matches;
   std::vector<int> u_track;
   std::vector<int> u_detection;
-  matching::LinearAssignment(dists, num_rows, num_cols, /*threshold=*/0.7,
+  matching::LinearAssignment(dists, num_rows, num_cols, /*threshold=*/0.4,
                              matches, u_track, u_detection);
+  std::cout << "u_detection " << u_detection << std::endl;
 
   // After all these confirmation steps, if a new detection is found, it is
   // initialized for a new track
@@ -154,6 +171,8 @@ void FairMot::Update(const torch::Tensor &rDetections,
     p_track->Activate(mFrameId);
     activated_stracks.push_back(*p_track);
   }
+  std::cout << "activated_stracks ";
+  std::cout << activated_stracks << std::endl;
   // Step 5: Update state
   // If the tracks are lost for more frames than the threshold number, the
   // tracks are removed.
@@ -190,6 +209,19 @@ void FairMot::Update(const torch::Tensor &rDetections,
   std::vector<STrack> res_2;
   strack_util::RemoveDuplicateStracks(mTrackedStracks, mLostStracks, res_1,
                                       res_2);
+  mTrackedStracks = std::move(res_1);
+  mLostStracks = std::move(res_2);
+  std::cout << "mTrackedStracks ";
+  std::cout << mTrackedStracks << std::endl;
+
+  std::vector<STrack> output_stracks;
+  for (const auto &r_track : mTrackedStracks) {
+    if (r_track.mIsActivated) {
+      output_stracks.push_back(r_track);
+    }
+  }
+
+  return output_stracks;
 }
 
 cv::Mat FairMot::Preprocess(cv::Mat image) {

@@ -1,6 +1,7 @@
 #ifndef SRC_STRACK_HPP_
 #define SRC_STRACK_HPP_
 
+#include <iostream>
 #include <vector>
 
 #include "DataType.hpp"
@@ -13,12 +14,18 @@ class STrack {
  public:
   static const KalmanFilter kSharedKalman;
 
-  STrack(const std::vector<float> &rTlwh, const float score,
-         const std::vector<float> &rFeat, const int bufferSize = 30);
+  STrack(const BBox &rTlwh, const float score, const Embedding &rFeat,
+         const int bufferSize = 30);
+
+  friend std::ostream &operator<<(std::ostream &rOStream,
+                                  const STrack &rSTrack);
+
+  friend std::ostream &operator<<(std::ostream &rOStream,
+                                  const STrack *const pSTrack);
 
   static void MultiPredict(const std::vector<STrack *> &rStracks);
 
-  static const std::vector<float> &rXyxyToTlwh(std::vector<float> &rXyxy);
+  static const BBox &rXyxyToTlwh(BBox &rXyxy);
 
   void Activate(const int frameId);
 
@@ -28,9 +35,10 @@ class STrack {
 
   int NextId();
 
-  RowVector4fR TlwhToXyah(const std::vector<float> &rTlwh) const;
+  RowVectorR<4> TlwhToXyah(const BBox &rTlwh) const;
+  RowVectorR<4> ToXyah() const;
 
-  void UpdateFeatures(const std::vector<float> &rFeat);
+  void UpdateFeatures(const Embedding &rFeat);
 
   void UpdateTlwh();
   void UpdateXyxy();
@@ -39,23 +47,24 @@ class STrack {
   bool mIsActivated = false;
   TrackState mState = TrackState::kNEW;
 
-  std::vector<float> mCurrFeat;
-  std::vector<float> mSmoothFeat;
+  Embedding mCurrFeat;
+  Embedding mSmoothFeat;
   double mAlpha = 0.9;
 
-  std::vector<float> mTlwh;
-  std::vector<float> mXyxy;
+  BBox mTlwh;
+  BBox mXyxy;
   const float mScore;
 
   int mFrameId = 0;
   int mStartFrame = 0;
   int mTrackletLen = 0;
 
-  RowVector8fR mMean;
-  Matrix8fR mCovariance;
+  RowVectorR<8> mMean;
+  MatrixR<8> mCovariance;
 
  private:
-  std::vector<float> mTlwhCache;
+  BBox mTlwhCache;
+  bool mEmptySmoothFeat = true;
 };
 
 namespace strack_util {

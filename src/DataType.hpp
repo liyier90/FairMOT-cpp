@@ -2,13 +2,37 @@
 #define SRC_DATATYPE_HPP_
 
 #include <Eigen/Dense>
+#include <array>
 
 namespace fairmot {
-typedef Eigen::Matrix<float, 1, 4, Eigen::RowMajor> RowVector4fR;
-typedef Eigen::Matrix<float, 1, 8, Eigen::RowMajor> RowVector8fR;
-typedef Eigen::Matrix<float, 8, 8, Eigen::RowMajor> Matrix8fR;
+// Trick to specialize alias templates
+template <int... Sizes>
+struct MatrixRHelper {};
 
-typedef Eigen::Array<float, 1, 8> RowVector8fA;
+template <int Rows, int Cols>
+struct MatrixRHelper<Rows, Cols> {
+  using Type =
+      Eigen::Matrix<float, Rows, Cols, Eigen::RowMajor | Eigen::DontAlign>;
+};
+
+template <int Rows>
+struct MatrixRHelper<Rows> {
+  using Type =
+      Eigen::Matrix<float, Rows, Rows, Eigen::RowMajor | Eigen::DontAlign>;
+};
+
+template <int... Sizes>
+using MatrixR = typename MatrixRHelper<Sizes...>::Type;
+
+template <int NumCols>
+using RowVectorR =
+    Eigen::Matrix<float, 1, NumCols, Eigen::RowMajor | Eigen::DontAlign>;
+
+template <int NumCols>
+using RowVectorA = Eigen::Array<float, 1, NumCols>;
+
+typedef std::array<float, 4> BBox;
+typedef std::array<float, 128> Embedding;
 }  // namespace fairmot
 
 #endif  // SRC_DATATYPE_HPP_

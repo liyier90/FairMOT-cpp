@@ -2,6 +2,7 @@
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
+#include <cstring>
 #include <iostream>
 #include <unordered_map>
 #include <unordered_set>
@@ -9,22 +10,52 @@
 
 #include "DataType.hpp"
 #include "KalmanFilter.hpp"
+#include "Matching.hpp"
 
 namespace fairmot {
 const KalmanFilter STrack::kSharedKalman;
 
-STrack::STrack(const std::vector<float> &rTlwh, const float score,
-               const std::vector<float> &rFeat, const int bufferSize)
-    : mScore{score},
-      mMean{RowVector8fR::Zero()},
-      mCovariance{Matrix8fR::Zero()},
+// STrack::STrack(const BBox &rTlwh, const float score,
+//                const std::vector<float> &rFeat, const int bufferSize)
+STrack::STrack(const BBox &rTlwh, const float score, const Embedding &rFeat,
+               const int bufferSize)
+    : mCurrFeat(),
+      mSmoothFeat(),
+      mTlwh(),
+      mXyxy(),
+      mScore{score},
+      mMean{RowVectorR<8>::Zero()},
+      mCovariance{MatrixR<8>::Zero()},
       mTlwhCache{rTlwh} {
   this->UpdateTlwh();
   this->UpdateXyxy();
   this->UpdateFeatures(rFeat);
 }
 
-void STrack::MultiPredict(const std::vector<STrack *> &rStracks) {}
+std::ostream &operator<<(std::ostream &rOStream, const STrack &rSTrack) {
+  rOStream << "OT_" << rSTrack.mTrackId << "_(" << rSTrack.mStartFrame << "-"
+           << rSTrack.rEndFrame() << ")";
+
+  return rOStream;
+}
+
+std::ostream &operator<<(std::ostream &rOStream, const STrack *const pSTrack) {
+  rOStream << "OT_" << pSTrack->mTrackId << "_(" << pSTrack->mStartFrame << "-"
+           << pSTrack->rEndFrame() << ")";
+
+  return rOStream;
+}
+
+void STrack::MultiPredict(const std::vector<STrack *> &rStracks) {
+  for (const auto &r_track : rStracks) {
+    if (r_track->mState != TrackState::kTRACKED) {
+      r_track->mMean[7] = 0.0;
+    }
+    STrack::kSharedKalman.Predict(r_track->mMean, r_track->mCovariance);
+    r_track->UpdateTlwh();
+    r_track->UpdateXyxy();
+  }
+}
 
 void STrack::Activate(const int frameId) {
   mTrackId = this->NextId();
@@ -50,34 +81,38 @@ int STrack::NextId() {
   return count;
 }
 
-RowVector4fR STrack::TlwhToXyah(const std::vector<float> &rTlwh) const {
-  RowVector4fR xyah =
-      Eigen::Map<const RowVector4fR>(rTlwh.data(), rTlwh.size());
+RowVectorR<4> STrack::TlwhToXyah(const BBox &rTlwh) const {
+  RowVectorR<4> xyah =
+      Eigen::Map<const RowVectorR<4>>(rTlwh.data(), rTlwh.size());
   xyah({0, 1}) += xyah({2, 3}) / 2.0;
   xyah[2] /= xyah[3];
 
   return xyah;
 }
 
-const std::vector<float> &STrack::rXyxyToTlwh(std::vector<float> &rXyxy) {
+RowVectorR<4> STrack::ToXyah() const { return this->TlwhToXyah(mTlwh); }
+
+const BBox &STrack::rXyxyToTlwh(BBox &rXyxy) {
   rXyxy[2] -= rXyxy[0];
   rXyxy[3] -= rXyxy[1];
   return std::move(rXyxy);
 }
 
-void STrack::UpdateFeatures(const std::vector<float> &rFeat) {
-  Eigen::VectorXf features =
-      Eigen::Map<const Eigen::VectorXf>(rFeat.data(), rFeat.size());
+void STrack::UpdateFeatures(const Embedding &rFeat) {
+  RowVectorR<128> features =
+      Eigen::Map<const RowVectorR<128>>(rFeat.data(), rFeat.size());
   features = features.normalized();
-  mCurrFeat.assign(&features[0], features.data() + features.size());
-  if (!mSmoothFeat.empty()) {
-    // TODO: Check if this is better than assigning through for loop
-    Eigen::VectorXf smooth_feat =
-        Eigen::Map<Eigen::VectorXf>(mSmoothFeat.data(), mSmoothFeat.size());
+  memcpy(mCurrFeat.data(), features.data(), sizeof(float) * features.size());
+  if (mEmptySmoothFeat) {
+    mEmptySmoothFeat = false;
+  } else {
+    RowVectorR<128> smooth_feat = Eigen::Map<const RowVectorR<128>>(
+        mSmoothFeat.data(), mSmoothFeat.size());
     features = mAlpha * smooth_feat + (1.0 - mAlpha) * features;
   }
   features = features.normalized();
-  mSmoothFeat.assign(&features[0], features.data() + features.size());
+  // TODO: Check if memmove can be used
+  memcpy(mSmoothFeat.data(), features.data(), sizeof(float) * features.size());
 }
 
 void STrack::UpdateTlwh() {
@@ -140,7 +175,45 @@ std::vector<STrack> CombineStracks(const std::vector<STrack> &rStracks1,
 void RemoveDuplicateStracks(const std::vector<STrack> &rStracks1,
                             const std::vector<STrack> &rStracks2,
                             std::vector<STrack> &rRes1,
-                            std::vector<STrack> &rRes2) {}
+                            std::vector<STrack> &rRes2) {
+  const auto distances = matching::IouDistance(rStracks1, rStracks2);
+  std::vector<std::pair<int, int>> pairs;
+  for (auto i = 0u; i < distances.size(); ++i) {
+    for (auto j = 0u; j < distances[i].size(); ++j) {
+      if (distances[i][j] < 0.15) {
+        pairs.push_back(std::make_pair(i, j));
+      }
+    }
+  }
+
+  std::vector<int> duplicates_1;
+  std::vector<int> duplicates_2;
+  for (const auto &r_pair : pairs) {
+    const auto idx_1 = r_pair.first;
+    const auto idx_2 = r_pair.second;
+    const auto age_1 = rStracks1[idx_1].mFrameId - rStracks1[idx_1].mStartFrame;
+    const auto age_2 = rStracks2[idx_2].mFrameId - rStracks2[idx_2].mStartFrame;
+    if (age_1 > age_2) {
+      duplicates_2.push_back(idx_2);
+    } else {
+      duplicates_1.push_back(idx_1);
+    }
+  }
+
+  for (auto i = 0u; i < rStracks1.size(); ++i) {
+    auto iter = std::find(duplicates_1.begin(), duplicates_1.end(), i);
+    if (iter == duplicates_1.end()) {
+      rRes1.push_back(rStracks1[i]);
+    }
+  }
+
+  for (auto i = 0u; i < rStracks2.size(); ++i) {
+    auto iter = std::find(duplicates_2.begin(), duplicates_2.end(), i);
+    if (iter == duplicates_2.end()) {
+      rRes2.push_back(rStracks2[i]);
+    }
+  }
+}
 
 std::vector<STrack> SubstractStracks(const std::vector<STrack> &rStracks1,
                                      const std::vector<STrack> &rStracks2) {
@@ -154,7 +227,8 @@ std::vector<STrack> SubstractStracks(const std::vector<STrack> &rStracks1,
       stracks.erase(tid);
     }
   }
-  std::vector<STrack> res(stracks.size());
+  std::vector<STrack> res;
+  res.reserve(stracks.size());
   for (const auto &r_track : stracks) {
     res.push_back(r_track.second);
   }
