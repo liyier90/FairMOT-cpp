@@ -28,18 +28,16 @@ Eigen::RowVectorXf KalmanFilter::GatingDistance(
   RowVectorR<4> mean;
   MatrixR<4> covariance;
   std::tie(mean, covariance) = this->Project(rMean, rCovariance);
-  std::cout << "Project" << std::endl;
   MatrixR<-1, 4> distances(rMeasurements.size(), 4);
   auto pos = 0;
   for (const auto &r_box : rMeasurements) {
     distances.row(pos++) = r_box - mean;
   }
-  std::cout << distances << std::endl;
   MatrixR<-1, -1> factor = covariance.llt().matrixL();
-  Eigen::ArrayXf z = factor.triangularView<Eigen::Lower>()
-                         .solve<Eigen::OnTheRight>(distances)
-                         .transpose()
-                         .array();
+  Eigen::ArrayXXf z = factor.triangularView<Eigen::Lower>()
+                          .solve<Eigen::OnTheRight>(distances)
+                          .transpose()
+                          .array();
   auto squared_maha = (z * z).matrix().colwise().sum();
 
   return squared_maha;
@@ -100,10 +98,7 @@ std::pair<RowVectorR<4>, MatrixR<4>> KalmanFilter::Project(
       1e-1,
       mStdWeightPosition * rMean[3];
   // clang-format on
-  std::cout << "Project init" << std::endl;
-  std::cout << rMean << std::endl;
   RowVectorR<4> mean = mUpdateMat * rMean.transpose();
-  std::cout << "mean" << std::endl;
   MatrixR<4> covariance = mUpdateMat * rCovariance * mUpdateMat.transpose();
   Eigen::Matrix4f diag = std_dev.asDiagonal();
   diag = diag.array().square().matrix();
