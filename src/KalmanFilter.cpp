@@ -13,10 +13,14 @@ const std::array<double, 10> KalmanFilter::kChi2Inv95 = {
     11.070, 12.592, 14.067, 15.507, 16.919};
 
 KalmanFilter::KalmanFilter()
-    : mMotionMat{MatrixR<8>::Identity()},
-      mUpdateMat{MatrixR<4, 8>::Identity()},
+    : mMotionMat{MatrixR<kNDim * 2>::Identity()},
+      mUpdateMat{MatrixR<kNDim, kNDim * 2>::Identity()},
       mStdWeightPosition{1.0 / 20.0},
-      mStdWeightVelocity{1.0 / 160.0} {}
+      mStdWeightVelocity{1.0 / 160.0} {
+  for (int i = 0; i < kNDim; ++i) {
+    mMotionMat(i, kNDim + i) = kDt;
+  }
+}
 
 Eigen::RowVectorXf KalmanFilter::GatingDistance(
     const RowVectorR<8> &rMean, const MatrixR<8> &rCovariance,
@@ -39,6 +43,7 @@ Eigen::RowVectorXf KalmanFilter::GatingDistance(
                           .transpose()
                           .array();
   auto squared_maha = (z * z).matrix().colwise().sum();
+  // std::cout << squared_maha << std::endl;
 
   return squared_maha;
 }

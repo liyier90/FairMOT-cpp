@@ -152,6 +152,9 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
   matching::EmbeddingDistance(strack_pool, detections, dists, num_rows,
                               num_cols);
   matching::FuseMotion(STrack::kSharedKalman, strack_pool, detections, dists);
+  for (auto i = 0; i < num_rows; ++i) {
+    std::cout << dists[i] << std::endl;
+  }
 
   std::vector<std::vector<int>> matches;
   std::vector<int> u_track;

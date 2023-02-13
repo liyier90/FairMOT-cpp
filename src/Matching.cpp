@@ -27,7 +27,7 @@ void EmbeddingDistance(const std::vector<STrack *> &rTracks,
 
     for (int j = 0; j < rNumCols; ++j) {
       RowVectorR<128> det_feature = Eigen::Map<const RowVectorR<128>>(
-          rDetections[i].mCurrFeat.data(), rDetections[i].mCurrFeat.size());
+          rDetections[j].mCurrFeat.data(), rDetections[j].mCurrFeat.size());
       cost_matrix_row[j] = 1.0 - track_feature.dot(det_feature) /
                                      track_feature.norm() / det_feature.norm();
     }
@@ -50,11 +50,9 @@ void FuseMotion(const KalmanFilter &rKalmanFilter,
   for (const auto &r_det : rDetections) {
     measurements.push_back(r_det.ToXyah());
   }
-  std::cout << "measurements" << std::endl;
   for (auto i = 0u; i < rTracks.size(); ++i) {
     const auto gating_distance = rKalmanFilter.GatingDistance(
         rTracks[i]->mMean, rTracks[i]->mCovariance, measurements, onlyPosition);
-    std::cout << "GatingDistance" << std::endl;
     for (auto j = 0u; j < rCostMatrix[i].size(); ++j) {
       if (gating_distance[j] > gating_threshold) {
         rCostMatrix[i][j] = FLT_MAX;
