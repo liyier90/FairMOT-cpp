@@ -100,6 +100,7 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
   std::vector<STrack> removed_stracks;
 
   const auto num_detections = rDetections.size(0);
+  std::cout << "num_detections " << num_detections << std::endl;
   std::vector<STrack> detections;
 
   // Step 1: Network forward, get detections & embeddings
@@ -109,11 +110,12 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
     // Detections is a list of (x1, y1, x2, y2, score)
     for (int i = 0; i < num_detections; ++i) {
       BBox xyxy;
-      memcpy(xyxy.data(), rDetections[i].data_ptr<float>(), sizeof(float) * 4);
+      memcpy(xyxy.data(), rDetections[i].data_ptr<float>(),
+             sizeof(float) * kBBoxSize);
       const auto score = rDetections[i][4].item<float>();
       Embedding embedding;
       memcpy(embedding.data(), rEmbeddings[i].data_ptr<float>(),
-             sizeof(float) * 128);
+             sizeof(float) * kEmbeddingSize);
 
       STrack strack(STrack::rXyxyToTlwh(xyxy), score, embedding);
       detections.push_back(strack);
@@ -142,7 +144,6 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
   std::cout << "strack_pool " << strack_pool << std::endl;
   // Predict the current location with KF
   STrack::MultiPredict(strack_pool);
-  std::cout << "MultiPredict" << std::endl;
 
   // The dists is a matrix of distances of the detection with the tracks
   // in strack_pool
@@ -152,15 +153,16 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
   matching::EmbeddingDistance(strack_pool, detections, dists, num_rows,
                               num_cols);
   matching::FuseMotion(STrack::kSharedKalman, strack_pool, detections, dists);
-  for (auto i = 0; i < num_rows; ++i) {
-    std::cout << dists[i] << std::endl;
-  }
+  // for (const auto &r_row : dists) {
+  //   std::cout << r_row << std::endl;
+  // }
 
   std::vector<std::vector<int>> matches;
   std::vector<int> u_track;
   std::vector<int> u_detection;
   matching::LinearAssignment(dists, num_rows, num_cols, /*threshold=*/0.4,
                              matches, u_track, u_detection);
+  std::cout << "u_track " << u_track << std::endl;
   std::cout << "u_detection " << u_detection << std::endl;
 
   // After all these confirmation steps, if a new detection is found, it is

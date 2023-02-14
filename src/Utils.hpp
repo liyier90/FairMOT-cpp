@@ -3,6 +3,8 @@
 
 #include <torch/torch.h>
 
+#include <Eigen/Core>
+#include <Eigen/Dense>
 #include <array>
 #include <opencv2/opencv.hpp>
 #include <vector>
@@ -24,6 +26,11 @@ std::vector<double> GetDir(const torch::ArrayRef<double> &rSrcPoint,
 void GetThirdPoint(const cv::Point2f &rPoint1, const cv::Point2f &rPoint2,
                    cv::Point2f &rThirdPoint);
 
+double Lapjv(const std::vector<std::vector<float>> &rCost,
+             std::vector<int> &rRowsol, std::vector<int> &rColsol,
+             bool extendCost = false, float costLimit = FLT_MAX,
+             bool returnCost = true);
+
 cv::Mat Letterbox(cv::Mat image, int targetHeight, int targetWidth);
 
 void TransformCoords(torch::Tensor &rCoords,
@@ -32,6 +39,14 @@ void TransformCoords(torch::Tensor &rCoords,
 
 torch::Tensor TransposeAndGatherFeat(const torch::Tensor &rFeat,
                                      const torch::Tensor &rIndices);
+
+template <typename Matrix, typename Row, typename Value>
+void Map(Matrix &rTarget, const std::vector<std::vector<Value>> &rSource) {
+  auto idx = 0;
+  for (const auto &r_row : rSource) {
+    rTarget.row(idx++) = Eigen::Map<const Row>(r_row.data(), r_row.size());
+  }
+}
 }  // namespace util
 }  // namespace fairmot
 

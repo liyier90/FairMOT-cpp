@@ -41,6 +41,7 @@ set(SOURCES
     src/Decoder.cpp
     src/FairMot.cpp
     src/KalmanFilter.cpp
+    src/Lapjv.cpp
     src/Matching.cpp
     src/STrack.cpp
     src/Utils.cpp

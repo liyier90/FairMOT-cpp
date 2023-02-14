@@ -7,6 +7,7 @@
 #include <numeric>
 
 #include "DataType.hpp"
+#include "Utils.hpp"
 
 namespace fairmot {
 namespace matching {
@@ -141,6 +142,28 @@ void LinearAssignment(const std::vector<std::vector<float>> &rCostMatrix,
     std::iota(rUnmatched1.begin(), rUnmatched1.end(), 0);
     std::iota(rUnmatched2.begin(), rUnmatched2.end(), 0);
     return;
+  }
+
+  std::vector<int> rowsol;
+  std::vector<int> colsol;
+  const auto cost =
+      util::Lapjv(rCostMatrix, rowsol, colsol, /*extendCost=*/true, threshold);
+  std::cout << cost << std::endl;
+  std::cout << "rowsol " << rowsol.size() << std::endl;
+  std::cout << "colsol " << colsol << std::endl;
+  for (auto i = 0u; i < rowsol.size(); ++i) {
+    int index = static_cast<int>(i);
+    if (rowsol[i] >= 0) {
+      std::vector<int> match = {index, rowsol[i]};
+      rMatches.push_back(match);
+    } else {
+      rUnmatched1.push_back(index);
+    }
+  }
+  for (auto i = 0u; i < colsol.size(); ++i) {
+    if (colsol[i] < 0) {
+      rUnmatched2.push_back(static_cast<int>(i));
+    }
   }
 }
 }  // namespace matching

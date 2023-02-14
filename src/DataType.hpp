@@ -3,6 +3,8 @@
 
 #include <Eigen/Dense>
 #include <array>
+#include <cstddef>
+#include <vector>
 
 namespace fairmot {
 // Trick to specialize alias templates
@@ -31,8 +33,11 @@ using RowVectorR =
 template <int NumCols>
 using RowVectorA = Eigen::Array<float, 1, NumCols>;
 
-typedef std::array<float, 4> BBox;
-typedef std::array<float, 128> Embedding;
+static constexpr std::size_t kBBoxSize = 4;
+static constexpr std::size_t kEmbeddingSize = 128;
+
+typedef std::array<float, kBBoxSize> BBox;
+typedef std::array<float, kEmbeddingSize> Embedding;
 }  // namespace fairmot
 
 #endif  // SRC_DATATYPE_HPP_
