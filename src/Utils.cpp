@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "DataType.hpp"
 #include "Lapjv.hpp"
 
 namespace fairmot {
@@ -77,14 +78,14 @@ void GetThirdPoint(const cv::Point2f &rPoint1, const cv::Point2f &rPoint2,
 double Lapjv(const std::vector<std::vector<float>> &rCost,
              std::vector<int> &rRowsol, std::vector<int> &rColsol,
              bool extendCost, float costLimit, bool returnCost) {
-  auto cost_c = rCost;
   const auto n_rows = rCost.size();
   const auto n_cols = rCost[0].size();
-  Eigen::ArrayXXf cost_mat(n_rows, n_cols);
-  Map<Eigen::ArrayXXf, Eigen::ArrayXf, float>(cost_mat, cost_c);
+  ArrayR<float, -1> cost_f(n_rows, n_cols);
+  Map<ArrayR<float, -1>, ArrayR<float, 1, -1>, float>(cost_f, rCost);
+  ArrayR<double, -1> cost_d = cost_f.cast<double>();
 
-  rRowsol.reserve(n_rows);
-  rColsol.reserve(n_cols);
+  // rRowsol.reserve(n_rows);
+  // rColsol.reserve(n_cols);
 
   if (n_rows != n_cols && !extendCost) {
     throw std::logic_error(
@@ -94,93 +95,48 @@ double Lapjv(const std::vector<std::vector<float>> &rCost,
 
   auto n = n_rows;
   if (extendCost || costLimit < FLT_MAX) {
-    std::vector<std::vector<float>> cost_c_extended;
     n = n_rows + n_cols;
-    Eigen::ArrayXXf cost_mat_extended(n, n);
-    if (costLimit < FLT_MAX) {
-      cost_mat_extended = costLimit / 2.0;
-      cost_c_extended.assign(n, std::vector<float>(n, costLimit / 2.0));
-    } else {
-      cost_mat_extended = cost_mat.maxCoeff();
-      float max_cost = 0.0;
-      for (const auto &r_row : cost_c) {
-        for (const auto &r_cost : r_row) {
-          if (r_cost > max_cost) {
-            max_cost = r_cost;
-          }
-        }
-      }
-      cost_c_extended.assign(n, std::vector<float>(n, max_cost + 1.0));
-    }
-    for (auto i = n_rows; i < n; ++i) {
-      for (auto j = n_cols; j < n; ++j) {
-        cost_c_extended[i][j] = 0.0;
-      }
-    }
-    cost_mat_extended.bottomRightCorner(n - n_rows, n - n_cols) = 0.0;
-    cost_mat_extended.topLeftCorner(n_rows, n_cols) = cost_mat;
-    for (auto i = 0u; i < n_rows; ++i) {
-      for (auto j = 0u; j < n_cols; ++j) {
-        cost_c_extended[i][j] = cost_c[i][j];
-      }
-    }
-    cost_c = cost_c_extended;
-    cost_mat = cost_mat_extended;
+    ArrayR<double, -1> cost_d_extended(n, n);
+    cost_d_extended = costLimit < FLT_MAX ? costLimit / 2.0 : cost_d.maxCoeff();
+    cost_d_extended.bottomRightCorner(n - n_rows, n - n_cols) = 0.0;
+    cost_d_extended.topLeftCorner(n_rows, n_cols) = cost_d;
+    cost_d = cost_d_extended;
   }
 
   auto **p_cost = new double *[sizeof(double *) * n];
   for (auto i = 0u; i < n; ++i) {
-    p_cost[i] = new double[sizeof(double) * n];
-  }
-  for (auto i = 0u; i < n; ++i) {
-    for (auto j = 0u; j < n; ++j) {
-      p_cost[i][j] = cost_c[i][j];
-    }
+    p_cost[i] = cost_d.data() + i * n;
   }
 
-  auto *p_x_c = new int[sizeof(int) * n];
-  auto *p_y_c = new int[sizeof(int) * n];
-  auto ret = lapjv_internal(n, p_cost, p_x_c, p_y_c);
+  ArrayR<int, 1, -1> p_x_c(n);
+  ArrayR<int, 1, -1> p_y_c(n);
+  auto ret = lapjv_internal(n, p_cost, p_x_c.data(), p_y_c.data());
   if (ret != 0) {
     throw std::logic_error("Calculate wrong!");
   }
 
   auto opt = 0.0;
   if (n != n_rows) {
-    for (auto i = 0u; i < n; ++i) {
-      if (p_x_c[i] >= static_cast<int>(n_cols)) {
-        p_x_c[i] = -1;
-      }
-      if (p_y_c[i] >= static_cast<int>(n_rows)) {
-        p_y_c[i] = -1;
-      }
-    }
-    for (auto i = 0u; i < n_rows; ++i) {
-      rRowsol.push_back(p_x_c[i]);
-    }
-    for (auto i = 0u; i < n_cols; ++i) {
-      rColsol.push_back(p_y_c[i]);
-    }
+    p_x_c = (p_x_c >= static_cast<int>(n_cols)).select(-1, p_x_c);
+    p_y_c = (p_y_c >= static_cast<int>(n_rows)).select(-1, p_y_c);
+    rRowsol.assign(p_x_c.data(), p_x_c.data() + n_rows);
+    rColsol.assign(p_y_c.data(), p_y_c.data() + n_cols);
 
     if (returnCost) {
       for (auto i = 0u; i < n_rows; ++i) {
         if (rRowsol[i] != -1) {
-          opt += p_cost[i][rRowsol[i]];
+          opt += cost_d(i, rRowsol[i]);
         }
       }
     }
   } else if (returnCost) {
     for (auto i = 0u; i < n_rows; ++i) {
-      opt += p_cost[i][rRowsol[i]];
+      opt += cost_d(i, rRowsol[i]);
     }
   }
 
-  for (auto i = 0u; i < n; ++i) {
-    delete[] p_cost[i];
-  }
+  // Elements in p_cost are freed by Eigen
   delete[] p_cost;
-  delete[] p_x_c;
-  delete[] p_y_c;
 
   return opt;
 }

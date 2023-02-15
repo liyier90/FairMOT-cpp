@@ -15,17 +15,21 @@ class KalmanFilter {
   KalmanFilter();
 
   Eigen::RowVectorXf GatingDistance(
-      const RowVectorR<8> &rMean, const MatrixR<8> &rCovariance,
-      const std::vector<RowVectorR<4>> &rMeasurements,
+      const RowVecR<8> &rMean, const MatrixR<8> &rCovariance,
+      const std::vector<RowVecR<4>> &rMeasurements,
       const bool onlyPosition) const;
 
-  std::pair<RowVectorR<8>, MatrixR<8>> Initiate(
-      const RowVectorR<4> &rMeasurement) const;
+  std::pair<RowVecR<8>, MatrixR<8>> Initiate(
+      const RowVecR<4> &rMeasurement) const;
 
-  void Predict(RowVectorR<8> &rMean, MatrixR<8> &rCovariance) const;
+  void Predict(RowVecR<8> &rMean, MatrixR<8> &rCovariance) const;
 
-  std::pair<RowVectorR<4>, MatrixR<4>> Project(
-      const RowVectorR<8> &rMean, const MatrixR<8> &rCovariance) const;
+  std::pair<RowVecR<4>, MatrixR<4>> Project(
+      const RowVecR<8> &rMean, const MatrixR<8> &rCovariance) const;
+
+  std::pair<RowVecR<8>, MatrixR<8>> Update(
+      const RowVecR<8> &rMean, const MatrixR<8> &rCovariance,
+      const RowVecR<4> &rMeasurement) const;
 
  private:
   static constexpr int kNDim = 4;

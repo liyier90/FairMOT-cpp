@@ -1,6 +1,8 @@
 #ifndef SRC_MATCHING_HPP_
 #define SRC_MATCHING_HPP_
 
+#include <utility>
+
 #include "DataType.hpp"
 #include "KalmanFilter.hpp"
 #include "STrack.hpp"
@@ -20,8 +22,12 @@ void FuseMotion(const KalmanFilter &rKalmanFilter,
 
 float GetArea(const BBox &rXyxy);
 
-std::vector<std::vector<float>> IouDistance(const std::vector<STrack> rTracks1,
-                                            const std::vector<STrack> rTracks2);
+std::vector<std::vector<float>> IouDistance(
+    const std::vector<STrack> &rTracks1, const std::vector<STrack> &rTracks2);
+
+std::vector<std::vector<float>> IouDistance(
+    const std::vector<STrack *> &rTracks1, const std::vector<STrack> &rTracks2,
+    int &rNumRows, int &rNumCols);
 
 std::vector<std::vector<float>> Ious(const std::vector<BBox> &rXyxys1,
                                      const std::vector<BBox> &rXyxys2);
@@ -29,7 +35,7 @@ std::vector<std::vector<float>> Ious(const std::vector<BBox> &rXyxys1,
 void LinearAssignment(const std::vector<std::vector<float>> &rCostMatrix,
                       const int numRows, const int numCols,
                       const float threshold,
-                      std::vector<std::vector<int>> &rMatches,
+                      std::vector<std::pair<int, int>> &rMatches,
                       std::vector<int> &rUnmatched1,
                       std::vector<int> &rUnmatched2);
 }  // namespace matching

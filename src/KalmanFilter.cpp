@@ -23,13 +23,13 @@ KalmanFilter::KalmanFilter()
 }
 
 Eigen::RowVectorXf KalmanFilter::GatingDistance(
-    const RowVectorR<8> &rMean, const MatrixR<8> &rCovariance,
-    const std::vector<RowVectorR<4>> &rMeasurements,
+    const RowVecR<8> &rMean, const MatrixR<8> &rCovariance,
+    const std::vector<RowVecR<4>> &rMeasurements,
     const bool onlyPosition) const {
   if (onlyPosition) {
     throw std::logic_error("'onlyPosition = true' not implemented.");
   }
-  RowVectorR<4> mean;
+  RowVecR<4> mean;
   MatrixR<4> covariance;
   std::tie(mean, covariance) = this->Project(rMean, rCovariance);
   MatrixR<-1, 4> distances(rMeasurements.size(), 4);
@@ -43,17 +43,16 @@ Eigen::RowVectorXf KalmanFilter::GatingDistance(
                           .transpose()
                           .array();
   auto squared_maha = (z * z).matrix().colwise().sum();
-  // std::cout << squared_maha << std::endl;
 
   return squared_maha;
 }
 
-std::pair<RowVectorR<8>, MatrixR<8>> KalmanFilter::Initiate(
-    const RowVectorR<4> &rMeasurement) const {
-  RowVectorR<8> mean;
-  mean << rMeasurement, RowVectorR<4>::Zero();
+std::pair<RowVecR<8>, MatrixR<8>> KalmanFilter::Initiate(
+    const RowVecR<4> &rMeasurement) const {
+  RowVecR<8> mean;
+  mean << rMeasurement, RowVecR<4>::Zero();
 
-  RowVectorA<8> std_dev;
+  RowVecA<8> std_dev;
   // clang-format off
   std_dev <<
       2.0 * mStdWeightPosition * rMeasurement[3],
@@ -70,10 +69,9 @@ std::pair<RowVectorR<8>, MatrixR<8>> KalmanFilter::Initiate(
   return std::make_pair(mean, covariance);
 }
 
-void KalmanFilter::Predict(RowVectorR<8> &rMean,
-                           MatrixR<8> &rCovariance) const {
+void KalmanFilter::Predict(RowVecR<8> &rMean, MatrixR<8> &rCovariance) const {
   // TODO: Look into MultiPredict
-  RowVectorA<8> std_pos_vel;
+  RowVecA<8> std_pos_vel;
   // clang-format off
   std_pos_vel <<
       mStdWeightPosition * rMean[3],
@@ -85,7 +83,7 @@ void KalmanFilter::Predict(RowVectorR<8> &rMean,
       1e-5,
       mStdWeightVelocity * rMean[3];
   // clang-format on
-  RowVectorR<8> mean = mMotionMat * rMean.transpose();
+  RowVecR<8> mean = mMotionMat * rMean.transpose();
   MatrixR<8> covariance = mMotionMat * rCovariance * mMotionMat.transpose();
   covariance += std_pos_vel.square().matrix().asDiagonal();
 
@@ -93,9 +91,9 @@ void KalmanFilter::Predict(RowVectorR<8> &rMean,
   rCovariance = std::move(covariance);
 }
 
-std::pair<RowVectorR<4>, MatrixR<4>> KalmanFilter::Project(
-    const RowVectorR<8> &rMean, const MatrixR<8> &rCovariance) const {
-  RowVectorR<4> std_dev;
+std::pair<RowVecR<4>, MatrixR<4>> KalmanFilter::Project(
+    const RowVecR<8> &rMean, const MatrixR<8> &rCovariance) const {
+  RowVecR<4> std_dev;
   // clang-format off
   std_dev <<
       mStdWeightPosition * rMean[3],
@@ -103,11 +101,30 @@ std::pair<RowVectorR<4>, MatrixR<4>> KalmanFilter::Project(
       1e-1,
       mStdWeightPosition * rMean[3];
   // clang-format on
-  RowVectorR<4> mean = mUpdateMat * rMean.transpose();
+  RowVecR<4> mean = mUpdateMat * rMean.transpose();
   MatrixR<4> covariance = mUpdateMat * rCovariance * mUpdateMat.transpose();
   Eigen::Matrix4f diag = std_dev.asDiagonal();
   diag = diag.array().square().matrix();
   covariance += diag;
+
   return std::make_pair(mean, covariance);
+}
+
+std::pair<RowVecR<8>, MatrixR<8>> KalmanFilter::Update(
+    const RowVecR<8> &rMean, const MatrixR<8> &rCovariance,
+    const RowVecR<4> &rMeasurement) const {
+  RowVecR<4> mean;
+  MatrixR<4> covariance;
+  std::tie(mean, covariance) = this->Project(rMean, rCovariance);
+
+  Matrix<4, 8> B = (rCovariance * mUpdateMat.transpose()).transpose();
+  Matrix<8, 4> kalman_gain = covariance.llt().solve(B).transpose();
+  RowVecR<4> innovation = rMeasurement - mean;
+
+  RowVecR<8> new_mean = rMean + innovation * kalman_gain.transpose();
+  MatrixR<8> new_covariance =
+      rCovariance - kalman_gain * covariance * kalman_gain.transpose();
+
+  return std::make_pair(new_mean, new_covariance);
 }
 }  // namespace fairmot

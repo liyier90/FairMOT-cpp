@@ -35,8 +35,14 @@ class STrack {
 
   int NextId();
 
-  RowVectorR<4> TlwhToXyah(const BBox &rTlwh) const;
-  RowVectorR<4> ToXyah() const;
+  void ReActivate(const STrack *const pOther, const int frameId,
+                  const bool newId = false);
+
+  RowVecR<4> TlwhToXyah(const BBox &rTlwh) const;
+  RowVecR<4> ToXyah() const;
+
+  void Update(const STrack *const pOther, const int frameId,
+              const bool updateFeature = true);
 
   void UpdateFeatures(const Embedding &rFeat);
 
@@ -53,13 +59,13 @@ class STrack {
 
   BBox mTlwh;
   BBox mXyxy;
-  const float mScore;
+  float mScore;
 
   int mFrameId = 0;
   int mStartFrame = 0;
   int mTrackletLen = 0;
 
-  RowVectorR<8> mMean;
+  RowVecR<8> mMean;
   MatrixR<8> mCovariance;
 
  private:

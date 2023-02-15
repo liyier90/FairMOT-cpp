@@ -7,38 +7,61 @@
 #include <vector>
 
 namespace fairmot {
-// Trick to specialize alias templates
-template <int... Sizes>
-struct MatrixRHelper {};
-
-template <int Rows, int Cols>
-struct MatrixRHelper<Rows, Cols> {
-  using Type =
-      Eigen::Matrix<float, Rows, Cols, Eigen::RowMajor | Eigen::DontAlign>;
-};
-
-template <int Rows>
-struct MatrixRHelper<Rows> {
-  using Type =
-      Eigen::Matrix<float, Rows, Rows, Eigen::RowMajor | Eigen::DontAlign>;
-};
-
-template <int... Sizes>
-using MatrixR = typename MatrixRHelper<Sizes...>::Type;
-
-template <int NumCols>
-using RowVectorR =
-    Eigen::Matrix<float, 1, NumCols, Eigen::RowMajor | Eigen::DontAlign>;
-
-template <int NumCols>
-using RowVectorA = Eigen::Array<float, 1, NumCols>;
-
 static constexpr std::size_t kBBoxSize = 4;
 static constexpr std::size_t kEmbeddingSize = 128;
 
 typedef std::array<float, kBBoxSize> BBox;
 typedef std::array<float, kEmbeddingSize> Embedding;
+
+// Trick to specialize alias templates
+template <int... Sizes>
+struct MatrixRHelper;
+
+template <int Rows, int Cols>
+struct MatrixRHelper<Rows, Cols>;
+
+template <int Rows>
+struct MatrixRHelper<Rows>;
+
+template <int... Sizes>
+struct MatrixHelper;
+
+template <int Rows, int Cols>
+struct MatrixHelper<Rows, Cols>;
+
+template <int Rows>
+struct MatrixHelper<Rows>;
+
+template <typename Scalar, int... Sizes>
+struct ArrayRHelper;
+
+template <typename Scalar, int Rows, int Cols>
+struct ArrayRHelper<Scalar, Rows, Cols>;
+
+template <typename Scalar, int Rows>
+struct ArrayRHelper<Scalar, Rows>;
+
+template <int... Sizes>
+using MatrixR = typename MatrixRHelper<Sizes...>::Type;
+
+template <int... Sizes>
+using Matrix = typename MatrixHelper<Sizes...>::Type;
+
+template <typename Scalar, int... Sizes>
+using ArrayR = typename ArrayRHelper<Scalar, Sizes...>::Type;
+
+template <int NumCols>
+using RowVecR =
+    Eigen::Matrix<float, 1, NumCols, Eigen::RowMajor | Eigen::DontAlign>;
+
+// template <int NumCols>
+// using RowVector = Eigen::Matrix<float, 1, NumCols>;
+
+template <int NumCols>
+using RowVecA = Eigen::Array<float, 1, NumCols>;
 }  // namespace fairmot
+
+#include "DataType.ipp"
 
 #endif  // SRC_DATATYPE_HPP_
 

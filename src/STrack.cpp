@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <cstring>
 #include <iostream>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -24,7 +25,7 @@ STrack::STrack(const BBox &rTlwh, const float score, const Embedding &rFeat,
       mTlwh(),
       mXyxy(),
       mScore{score},
-      mMean{RowVectorR<8>::Zero()},
+      mMean{RowVecR<8>::Zero()},
       mCovariance{MatrixR<8>::Zero()},
       mTlwhCache{rTlwh} {
   this->UpdateTlwh();
@@ -81,16 +82,35 @@ int STrack::NextId() {
   return count;
 }
 
-RowVectorR<4> STrack::TlwhToXyah(const BBox &rTlwh) const {
-  RowVectorR<4> xyah =
-      Eigen::Map<const RowVectorR<4>>(rTlwh.data(), rTlwh.size());
+void STrack::ReActivate(const STrack *const pOther, const int frameId,
+                        const bool newId) {
+  mFrameId = frameId;
+  mTrackletLen = 0;
+
+  const auto xyah = this->TlwhToXyah(pOther->mTlwh);
+  std::tie(mMean, mCovariance) = kSharedKalman.Update(mMean, mCovariance, xyah);
+
+  this->UpdateTlwh();
+  this->UpdateXyxy();
+
+  mState = TrackState::kTRACKED;
+  mIsActivated = true;
+  if (newId) {
+    mTrackId = this->NextId();
+  }
+
+  this->UpdateFeatures(pOther->mCurrFeat);
+}
+
+RowVecR<4> STrack::TlwhToXyah(const BBox &rTlwh) const {
+  RowVecR<4> xyah = Eigen::Map<const RowVecR<4>>(rTlwh.data(), rTlwh.size());
   xyah({0, 1}) += xyah({2, 3}) / 2.0;
   xyah[2] /= xyah[3];
 
   return xyah;
 }
 
-RowVectorR<4> STrack::ToXyah() const { return this->TlwhToXyah(mTlwh); }
+RowVecR<4> STrack::ToXyah() const { return this->TlwhToXyah(mTlwh); }
 
 const BBox &STrack::rXyxyToTlwh(BBox &rXyxy) {
   rXyxy[2] -= rXyxy[0];
@@ -98,16 +118,35 @@ const BBox &STrack::rXyxyToTlwh(BBox &rXyxy) {
   return std::move(rXyxy);
 }
 
+void STrack::Update(const STrack *const pOther, const int frameId,
+                    const bool updateFeature) {
+  mFrameId = frameId;
+  ++mTrackletLen;
+
+  const auto xyah = this->TlwhToXyah(pOther->mTlwh);
+  std::tie(mMean, mCovariance) = kSharedKalman.Update(mMean, mCovariance, xyah);
+
+  this->UpdateTlwh();
+  this->UpdateXyxy();
+
+  mState = TrackState::kTRACKED;
+  mIsActivated = true;
+  mScore = pOther->mScore;
+  if (updateFeature) {
+    this->UpdateFeatures(pOther->mCurrFeat);
+  }
+}
+
 void STrack::UpdateFeatures(const Embedding &rFeat) {
-  RowVectorR<128> features =
-      Eigen::Map<const RowVectorR<128>>(rFeat.data(), rFeat.size());
+  RowVecR<128> features =
+      Eigen::Map<const RowVecR<128>>(rFeat.data(), rFeat.size());
   features = features.normalized();
   memcpy(mCurrFeat.data(), features.data(), sizeof(float) * features.size());
   if (mEmptySmoothFeat) {
     mEmptySmoothFeat = false;
   } else {
-    RowVectorR<128> smooth_feat = Eigen::Map<const RowVectorR<128>>(
-        mSmoothFeat.data(), mSmoothFeat.size());
+    RowVecR<128> smooth_feat =
+        Eigen::Map<const RowVecR<128>>(mSmoothFeat.data(), mSmoothFeat.size());
     features = mAlpha * smooth_feat + (1.0 - mAlpha) * features;
   }
   features = features.normalized();

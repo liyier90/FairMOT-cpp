@@ -5,6 +5,7 @@
 #include <cmath>
 #include <iostream>
 #include <numeric>
+#include <utility>
 
 #include "DataType.hpp"
 #include "Utils.hpp"
@@ -23,11 +24,11 @@ void EmbeddingDistance(const std::vector<STrack *> &rTracks,
 
   for (int i = 0; i < rNumRows; ++i) {
     std::vector<float> cost_matrix_row(rNumCols);
-    RowVectorR<128> track_feature = Eigen::Map<const RowVectorR<128>>(
+    RowVecR<128> track_feature = Eigen::Map<const RowVecR<128>>(
         rTracks[i]->mSmoothFeat.data(), rTracks[i]->mSmoothFeat.size());
 
     for (int j = 0; j < rNumCols; ++j) {
-      RowVectorR<128> det_feature = Eigen::Map<const RowVectorR<128>>(
+      RowVecR<128> det_feature = Eigen::Map<const RowVecR<128>>(
           rDetections[j].mCurrFeat.data(), rDetections[j].mCurrFeat.size());
       cost_matrix_row[j] = 1.0 - track_feature.dot(det_feature) /
                                      track_feature.norm() / det_feature.norm();
@@ -46,7 +47,7 @@ void FuseMotion(const KalmanFilter &rKalmanFilter,
   }
 
   const auto gating_threshold = KalmanFilter::kChi2Inv95[onlyPosition ? 2 : 4];
-  std::vector<RowVectorR<4>> measurements;
+  std::vector<RowVecR<4>> measurements;
   measurements.reserve(rDetections.size());
   for (const auto &r_det : rDetections) {
     measurements.push_back(r_det.ToXyah());
@@ -70,7 +71,7 @@ inline float GetArea(const BBox &rXyxy) {
 }
 
 std::vector<std::vector<float>> IouDistance(
-    const std::vector<STrack> rTracks1, const std::vector<STrack> rTracks2) {
+    const std::vector<STrack> &rTracks1, const std::vector<STrack> &rTracks2) {
   std::vector<BBox> xyxys_1;
   std::vector<BBox> xyxys_2;
   xyxys_1.reserve(rTracks1.size());
@@ -83,13 +84,46 @@ std::vector<std::vector<float>> IouDistance(
     xyxys_2.push_back(r_track.mXyxy);
   }
 
-  auto ious = Ious(xyxys_1, xyxys_2);
-  std::vector<std::vector<float>> cost_matrix(ious.size());
-  for (auto i = 0u; i < ious.size(); ++i) {
-    cost_matrix[i].reserve(ious[i].size());
-    for (auto j = 0u; j < ious[i].size(); ++j) {
-      cost_matrix[i][j] = 1.0 - ious[i][j];
+  const auto ious = Ious(xyxys_1, xyxys_2);
+  std::vector<std::vector<float>> cost_matrix;
+  for (const auto &r_row : ious) {
+    std::vector<float> cost_row;
+    cost_row.reserve(r_row.size());
+    for (const auto &r_val : r_row) {
+      cost_row.push_back(1.0 - r_val);
     }
+    cost_matrix.push_back(std::move(cost_row));
+  }
+
+  return cost_matrix;
+}
+
+std::vector<std::vector<float>> IouDistance(
+    const std::vector<STrack *> &rTracks1, const std::vector<STrack> &rTracks2,
+    int &rNumRows, int &rNumCols) {
+  rNumRows = rTracks1.size();
+  rNumCols = rTracks2.size();
+
+  std::vector<BBox> xyxys_1;
+  std::vector<BBox> xyxys_2;
+  xyxys_1.reserve(rTracks1.size());
+  xyxys_2.reserve(rTracks2.size());
+
+  for (const auto &r_track : rTracks1) {
+    xyxys_1.push_back(r_track->mXyxy);
+  }
+  for (const auto &r_track : rTracks2) {
+    xyxys_2.push_back(r_track.mXyxy);
+  }
+  const auto ious = Ious(xyxys_1, xyxys_2);
+  std::vector<std::vector<float>> cost_matrix;
+  for (const auto &r_row : ious) {
+    std::vector<float> cost_row;
+    cost_row.reserve(r_row.size());
+    for (const auto &r_val : r_row) {
+      cost_row.push_back(1.0 - r_val);
+    }
+    cost_matrix.push_back(std::move(cost_row));
   }
 
   return cost_matrix;
@@ -133,7 +167,7 @@ std::vector<std::vector<float>> Ious(const std::vector<BBox> &rXyxys1,
 void LinearAssignment(const std::vector<std::vector<float>> &rCostMatrix,
                       const int numRows, const int numCols,
                       const float threshold,
-                      std::vector<std::vector<int>> &rMatches,
+                      std::vector<std::pair<int, int>> &rMatches,
                       std::vector<int> &rUnmatched1,
                       std::vector<int> &rUnmatched2) {
   if (rCostMatrix.size() == 0) {
@@ -148,14 +182,10 @@ void LinearAssignment(const std::vector<std::vector<float>> &rCostMatrix,
   std::vector<int> colsol;
   const auto cost =
       util::Lapjv(rCostMatrix, rowsol, colsol, /*extendCost=*/true, threshold);
-  std::cout << cost << std::endl;
-  std::cout << "rowsol " << rowsol.size() << std::endl;
-  std::cout << "colsol " << colsol << std::endl;
   for (auto i = 0u; i < rowsol.size(); ++i) {
     int index = static_cast<int>(i);
     if (rowsol[i] >= 0) {
-      std::vector<int> match = {index, rowsol[i]};
-      rMatches.push_back(match);
+      rMatches.push_back(std::make_pair(index, rowsol[i]));
     } else {
       rUnmatched1.push_back(index);
     }
