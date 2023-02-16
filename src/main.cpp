@@ -8,6 +8,7 @@
 
 #include "FairMot.hpp"
 #include "Filesystem.hpp"
+#include "Utils.hpp"
 
 int ProcessVideo(const fs::path &rVideoPath);
 
@@ -52,11 +53,12 @@ int ProcessVideo(const fs::path &rVideoPath) {
     int video_width = cap.get(cv::CAP_PROP_FRAME_WIDTH);
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    tracker.Track(image);
+    const auto results = tracker.Track(image);
     auto end_time = std::chrono::high_resolution_clock::now();
 
     std::stringstream outfile_name;
     outfile_name << std::setfill('0') << std::setw(5) << num_frames << ".jpg";
+    fairmot::util::Visualize(image, results, num_frames);
     cv::imwrite((output_dir / outfile_name.str()).native(), image);
 
     std::chrono::duration<double> elapsed = end_time - start_time;

@@ -27,12 +27,14 @@ class FairMot {
   std::pair<torch::Tensor, torch::Tensor> Predict(const cv::Mat &rPaddedImage,
                                                   const cv::Mat &rImage);
 
-  void Track(const cv::Mat &rImage);
+  std::vector<TrackOutput> Track(const cv::Mat &rImage);
 
   std::vector<STrack> Update(const torch::Tensor &rDetections,
                              const torch::Tensor &rEmbeddings);
 
  private:
+  std::vector<TrackOutput> Postprocess(
+      const std::vector<STrack> &rOnlineTargets);
   cv::Mat Preprocess(cv::Mat image);
 
   torch::jit::script::Module mModel;
@@ -42,6 +44,7 @@ class FairMot {
 
   const int mInputHeight;
   const int mInputWidth;
+  const float mMinBoxArea;
   const double mScoreThreshold;
   const int mMaxTimeLost;
 

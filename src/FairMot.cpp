@@ -25,6 +25,7 @@ FairMot::FairMot(const std::string &rModelPath, const double frameRate,
       mDecoder(maxPerImage, 4),
       mInputHeight{480},
       mInputWidth{864},
+      mMinBoxArea{200.0},
       mScoreThreshold{0.4},
       mMaxTimeLost{static_cast<int>(frameRate / 30.0 * trackBuffer)},
       mFrameId{0},
@@ -78,13 +79,15 @@ std::pair<torch::Tensor, torch::Tensor> FairMot::Predict(
   return std::make_pair(detections, id_feature);
 }
 
-void FairMot::Track(const cv::Mat &rImage) {
+std::vector<TrackOutput> FairMot::Track(const cv::Mat &rImage) {
   auto padded_image = this->Preprocess(rImage);
   torch::Tensor detections;
   torch::Tensor embeddings;
   std::tie(detections, embeddings) = this->Predict(padded_image, rImage);
-  const auto output_stracks =
+  const auto online_targets =
       this->Update(detections.contiguous(), embeddings.contiguous());
+
+  return this->Postprocess(online_targets);
 }
 
 std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
@@ -307,6 +310,20 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
   }
 
   return output_stracks;
+}
+
+std::vector<TrackOutput> FairMot::Postprocess(
+    const std::vector<STrack> &rOnlineTargets) {
+  std::vector<TrackOutput> results;
+  for (const auto &r_track : rOnlineTargets) {
+    const auto tlwh = r_track.mTlwh;
+    const auto vertical = tlwh[2] / tlwh[3] > 1.6;
+    if (!vertical && tlwh[2] * tlwh[3] > mMinBoxArea) {
+      results.push_back({tlwh, r_track.mTrackId, r_track.mScore});
+    }
+  }
+
+  return results;
 }
 
 cv::Mat FairMot::Preprocess(cv::Mat image) {

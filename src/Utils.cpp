@@ -10,11 +10,14 @@
 #include <cmath>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "DataType.hpp"
 #include "Lapjv.hpp"
+#include "STrack.hpp"
 
 namespace fairmot {
 namespace util {
@@ -56,6 +59,11 @@ cv::Mat GetAffineTransform(const std::array<double, 2> &rCenter,
   }
 
   return matrix;
+}
+
+cv::Scalar GetColor(int idx) {
+  idx *= 3;
+  return cv::Scalar(37 * idx % 255, 17 * idx % 255, 29 * idx % 255);
 }
 
 std::vector<double> GetDir(const torch::ArrayRef<double> &rSrcPoint,
@@ -190,6 +198,23 @@ torch::Tensor TransposeAndGatherFeat(const torch::Tensor &rFeat,
   feat = feat.view({feat.size(0), -1, feat.size(3)});
 
   return GatherFeat(feat, rIndices);
+}
+
+void Visualize(cv::Mat image, const std::vector<TrackOutput> &rResults,
+               const int frameId) {
+  std::stringstream text_stream;
+  text_stream << "frame: " << frameId << " num: " << rResults.size();
+  cv::putText(image, text_stream.str(), cv::Point(0, 20),
+              cv::FONT_HERSHEY_PLAIN, 1.0, cv::Scalar(0, 0, 255));
+  for (const auto &r_result : rResults) {
+    const auto tlwh = r_result.tlwh;
+    const auto tid = r_result.track_id;
+    const auto color = GetColor(tid);
+    cv::rectangle(image, cv::Rect(tlwh[0], tlwh[1], tlwh[2], tlwh[3]), color,
+                  2);
+    cv::putText(image, std::to_string(tid), cv::Point(tlwh[0], tlwh[1]), 0, 0.6,
+                color, 2);
+  }
 }
 }  // namespace util
 }  // namespace fairmot

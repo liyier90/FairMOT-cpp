@@ -13,6 +13,12 @@ static constexpr std::size_t kEmbeddingSize = 128;
 typedef std::array<float, kBBoxSize> BBox;
 typedef std::array<float, kEmbeddingSize> Embedding;
 
+struct TrackOutput {
+  BBox tlwh;
+  int track_id;
+  float score;
+};
+
 // Trick to specialize alias templates
 template <int... Sizes>
 struct MatrixRHelper;
