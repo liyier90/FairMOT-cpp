@@ -20,24 +20,6 @@ struct TrackOutput {
 };
 
 // Trick to specialize alias templates
-template <int... Sizes>
-struct MatrixRHelper;
-
-template <int Rows, int Cols>
-struct MatrixRHelper<Rows, Cols>;
-
-template <int Rows>
-struct MatrixRHelper<Rows>;
-
-template <int... Sizes>
-struct MatrixHelper;
-
-template <int Rows, int Cols>
-struct MatrixHelper<Rows, Cols>;
-
-template <int Rows>
-struct MatrixHelper<Rows>;
-
 template <typename Scalar, int... Sizes>
 struct ArrayRHelper;
 
@@ -48,23 +30,56 @@ template <typename Scalar, int Rows>
 struct ArrayRHelper<Scalar, Rows>;
 
 template <int... Sizes>
-using MatrixR = typename MatrixRHelper<Sizes...>::Type;
+struct MatrixHelper;
+
+template <int Rows, int Cols>
+struct MatrixHelper<Rows, Cols>;
+
+template <int Rows>
+struct MatrixHelper<Rows>;
 
 template <int... Sizes>
-using Matrix = typename MatrixHelper<Sizes...>::Type;
+struct MatrixRHelper;
+
+template <int Rows, int Cols>
+struct MatrixRHelper<Rows, Cols>;
+
+template <int Rows>
+struct MatrixRHelper<Rows>;
+
+template <int... Sizes>
+struct MatrixRUHelper;
+
+template <int Rows, int Cols>
+struct MatrixRUHelper<Rows, Cols>;
+
+template <int Rows>
+struct MatrixRUHelper<Rows>;
 
 template <typename Scalar, int... Sizes>
 using ArrayR = typename ArrayRHelper<Scalar, Sizes...>::Type;
 
-template <int NumCols>
-using RowVecR =
-    Eigen::Matrix<float, 1, NumCols, Eigen::RowMajor | Eigen::DontAlign>;
+template <int... Sizes>
+using Matrix = typename MatrixHelper<Sizes...>::Type;
 
-// template <int NumCols>
-// using RowVector = Eigen::Matrix<float, 1, NumCols>;
+template <int... Sizes>
+using MatrixR = typename MatrixRHelper<Sizes...>::Type;
+
+template <int... Sizes>
+using MatrixRU = typename MatrixRUHelper<Sizes...>::Type;
 
 template <int NumCols>
 using RowVecA = Eigen::Array<float, 1, NumCols>;
+
+template <int NumCols>
+using RowVecR = Eigen::Matrix<float, 1, NumCols, Eigen::RowMajor>;
+
+template <int NumCols>
+using RowVecRU =
+    Eigen::Matrix<float, 1, NumCols, Eigen::RowMajor | Eigen::DontAlign>;
+
+template <typename Scalar>
+using Vec2D = std::array<Scalar, 2>;
 }  // namespace fairmot
 
 #include "DataType.ipp"

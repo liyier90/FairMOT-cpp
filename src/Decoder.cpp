@@ -3,10 +3,10 @@
 #include <torch/torch.h>
 
 #include <algorithm>
-#include <array>
 #include <tuple>
 #include <utility>
 
+#include "DataType.hpp"
 #include "Utils.hpp"
 
 namespace fairmot {
@@ -47,9 +47,8 @@ std::pair<torch::Tensor, torch::Tensor> Decoder::operator()(
 }
 
 void Decoder::CtdetPostProcess(torch::Tensor &rDetections,
-                               const std::array<double, 2> &rCenter,
-                               const double scale,
-                               const std::array<int, 2> &rOutputSize) {
+                               const Vec2D<double> &rCenter, const double scale,
+                               const Vec2D<int> &rOutputSize) {
   auto coords = rDetections.slice(1, 0, 4);
   util::TransformCoords(coords, rCenter, scale, rOutputSize);
   // TODO: Check if masking by class is really necessary
@@ -58,9 +57,9 @@ void Decoder::CtdetPostProcess(torch::Tensor &rDetections,
   rDetections = rDetections.slice(1, 0, 5).index_select(0, mask);
 }
 
-torch::Tensor Decoder::Nms(const torch::Tensor &rHeatmap, int kernel) {
+torch::Tensor Decoder::Nms(const torch::Tensor &rHeatmap, const int kernel) {
   namespace F = torch::nn::functional;
-  int pad = (kernel - 1) / 2;
+  const auto pad = (kernel - 1) / 2;
   const auto hmax = F::max_pool2d(
       rHeatmap, F::MaxPool2dFuncOptions(3).stride(1).padding(pad));
   const auto keep = (hmax == rHeatmap).to(torch::kFloat);

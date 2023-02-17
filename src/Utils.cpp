@@ -31,13 +31,11 @@ torch::Tensor GatherFeat(const torch::Tensor &rFeat,
   return feat;
 }
 
-cv::Mat GetAffineTransform(const std::array<double, 2> &rCenter,
-                           const double scale, const double rot,
-                           const std::array<int, 2> &rOutputSize,
-                           const std::array<double, 2> &rShift,
-                           const bool inv) {
+cv::Mat GetAffineTransform(const Vec2D<double> &rCenter, const double scale,
+                           const double rot, const Vec2D<int> &rOutputSize,
+                           const Vec2D<double> &rShift, const bool inv) {
   const auto src_dir = GetDir({0.0, scale * -0.5}, M_PI * rot / 180.0);
-  const std::vector<double> dst_dir = {0.0, rOutputSize[0] * -0.5};
+  const Vec2D<double> dst_dir = {0.0, rOutputSize[0] * -0.5};
 
   cv::Point2f src[3];
   cv::Point2f dst[3];
@@ -66,12 +64,12 @@ cv::Scalar GetColor(int idx) {
   return cv::Scalar(37 * idx % 255, 17 * idx % 255, 29 * idx % 255);
 }
 
-std::vector<double> GetDir(const torch::ArrayRef<double> &rSrcPoint,
-                           const double rotRad) {
+Vec2D<double> GetDir(const torch::ArrayRef<double> &rSrcPoint,
+                     const double rotRad) {
   const auto sin = std::sin(rotRad);
   const auto cos = std::cos(rotRad);
 
-  std::vector<double> src_result = {rSrcPoint[0] * cos - rSrcPoint[1] * sin,
+  const Vec2D<double> src_result = {rSrcPoint[0] * cos - rSrcPoint[1] * sin,
                                     rSrcPoint[0] * sin + rSrcPoint[1] * cos};
 
   return src_result;
@@ -83,36 +81,35 @@ void GetThirdPoint(const cv::Point2f &rPoint1, const cv::Point2f &rPoint2,
   rThirdPoint.y = rPoint2.y + rPoint2.x - rPoint1.x;
 }
 
-double Lapjv(const std::vector<std::vector<float>> &rCost,
-             std::vector<int> &rRowsol, std::vector<int> &rColsol,
-             bool extendCost, float costLimit, bool returnCost) {
-  const auto n_rows = rCost.size();
-  const auto n_cols = rCost[0].size();
-  ArrayR<float, -1> cost_f(n_rows, n_cols);
-  Map<ArrayR<float, -1>, ArrayR<float, 1, -1>, float>(cost_f, rCost);
+double Lapjv(const std::vector<float> &rCost, const int numRows,
+             const int numCols, std::vector<int> &rRowsol,
+             std::vector<int> &rColsol, bool extendCost, float costLimit,
+             bool returnCost) {
+  ArrayR<float, -1> cost_f(numRows, numCols);
+  Map<ArrayR<float, -1>, ArrayR<float, 1, -1>, float>(cost_f, rCost, numRows,
+                                                      numCols);
   ArrayR<double, -1> cost_d = cost_f.cast<double>();
 
-  // rRowsol.reserve(n_rows);
-  // rColsol.reserve(n_cols);
-
-  if (n_rows != n_cols && !extendCost) {
+  if (numRows != numCols && !extendCost) {
     throw std::logic_error(
         "Square cost array expected. Pass extendCost = true if non-square cost "
         "is intentional");
   }
 
-  auto n = n_rows;
+  auto n = numRows;
   if (extendCost || costLimit < FLT_MAX) {
-    n = n_rows + n_cols;
-    ArrayR<double, -1> cost_d_extended(n, n);
-    cost_d_extended = costLimit < FLT_MAX ? costLimit / 2.0 : cost_d.maxCoeff();
-    cost_d_extended.bottomRightCorner(n - n_rows, n - n_cols) = 0.0;
-    cost_d_extended.topLeftCorner(n_rows, n_cols) = cost_d;
-    cost_d = cost_d_extended;
+    n = numRows + numCols;
+    cost_d.conservativeResize(n, n);
+    const auto max_cost = cost_d.maxCoeff();
+    cost_d.topRightCorner(numRows, n - numCols) =
+        costLimit < FLT_MAX ? costLimit / 2.0 : max_cost;
+    cost_d.bottomLeftCorner(n - numRows, numCols) =
+        costLimit < FLT_MAX ? costLimit / 2.0 : max_cost;
+    cost_d.bottomRightCorner(n - numRows, n - numCols) = 0.0;
   }
 
   auto **p_cost = new double *[sizeof(double *) * n];
-  for (auto i = 0u; i < n; ++i) {
+  for (auto i = 0; i < n; ++i) {
     p_cost[i] = cost_d.data() + i * n;
   }
 
@@ -124,21 +121,21 @@ double Lapjv(const std::vector<std::vector<float>> &rCost,
   }
 
   auto opt = 0.0;
-  if (n != n_rows) {
-    p_x_c = (p_x_c >= static_cast<int>(n_cols)).select(-1, p_x_c);
-    p_y_c = (p_y_c >= static_cast<int>(n_rows)).select(-1, p_y_c);
-    rRowsol.assign(p_x_c.data(), p_x_c.data() + n_rows);
-    rColsol.assign(p_y_c.data(), p_y_c.data() + n_cols);
+  if (n != numRows) {
+    p_x_c = (p_x_c >= static_cast<int>(numCols)).select(-1, p_x_c);
+    p_y_c = (p_y_c >= static_cast<int>(numRows)).select(-1, p_y_c);
+    rRowsol.assign(p_x_c.data(), p_x_c.data() + numRows);
+    rColsol.assign(p_y_c.data(), p_y_c.data() + numCols);
 
     if (returnCost) {
-      for (auto i = 0u; i < n_rows; ++i) {
+      for (auto i = 0; i < numRows; ++i) {
         if (rRowsol[i] != -1) {
           opt += cost_d(i, rRowsol[i]);
         }
       }
     }
   } else if (returnCost) {
-    for (auto i = 0u; i < n_rows; ++i) {
+    for (auto i = 0; i < numRows; ++i) {
       opt += cost_d(i, rRowsol[i]);
     }
   }
@@ -172,9 +169,8 @@ cv::Mat Letterbox(cv::Mat image, int targetHeight, int targetWidth) {
   return image;
 }
 
-void TransformCoords(torch::Tensor &rCoords,
-                     const std::array<double, 2> &rCenter, const double scale,
-                     const std::array<int, 2> &rOutputSize) {
+void TransformCoords(torch::Tensor &rCoords, const Vec2D<double> &rCenter,
+                     const double scale, const Vec2D<int> &rOutputSize) {
   const auto matrix = GetAffineTransform(rCenter, scale, /*rot=*/0, rOutputSize,
                                          /*rShift=*/{0.0, 0.0}, /*inv=*/true);
   auto x1 = rCoords.select(1, 0).contiguous();

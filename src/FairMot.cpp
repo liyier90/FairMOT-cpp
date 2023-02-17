@@ -4,7 +4,6 @@
 #include <torchvision/vision.h>
 
 #include <algorithm>
-#include <cassert>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -92,7 +91,13 @@ std::vector<TrackOutput> FairMot::Track(const cv::Mat &rImage) {
 
 std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
                                     const torch::Tensor &rEmbeddings) {
+  auto verbose = false;
   ++mFrameId;
+  if (verbose && mFrameId == 4) {
+    exit(1);
+  }
+  if (verbose) std::cout << "=== mFrameId: " << mFrameId << std::endl;
+
   std::vector<STrack> activated_stracks;
   std::vector<STrack> refind_stracks;
   std::vector<STrack> lost_stracks;
@@ -141,15 +146,20 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
   strack_pool = strack_util::CombineStracks(tracked_stracks, mLostStracks);
   // Predict the current location with KF
   STrack::MultiPredict(strack_pool);
+  if (verbose) std::cout << "strack_pool " << strack_pool << std::endl;
 
   // The dists is a matrix of distances of the detection with the tracks
   // in strack_pool
-  std::vector<std::vector<float>> dists;
+  // std::vector<std::vector<float>> dists;
+  std::vector<float> dists;
   auto num_rows = 0;
   auto num_cols = 0;
   matching::EmbeddingDistance(strack_pool, detections, dists, num_rows,
                               num_cols);
-  matching::FuseMotion(STrack::kSharedKalman, strack_pool, detections, dists);
+  // matching::FuseMotion(STrack::kSharedKalman, strack_pool, detections,
+  // dists);
+  matching::FuseMotion(STrack::kSharedKalman, strack_pool, detections, dists,
+                       num_cols);
 
   // matches is the array for corresponding matches of the detections with the
   // corresponding strack_pool
@@ -194,6 +204,7 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
 
   dists =
       matching::IouDistance(r_tracked_stracks, detections, num_rows, num_cols);
+
   // matches is the list of detections which matched with corresponding
   // tracks by IOU distance method
   matches.clear();

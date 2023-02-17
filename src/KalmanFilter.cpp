@@ -47,6 +47,32 @@ Eigen::RowVectorXf KalmanFilter::GatingDistance(
   return squared_maha;
 }
 
+Eigen::RowVectorXf KalmanFilter::GatingDistance(
+    const RowVecR<8> &rMean, const MatrixR<8> &rCovariance,
+    const std::vector<RowVecR<4>, Eigen::aligned_allocator<RowVecR<4>>>
+        &rMeasurements,
+    const bool onlyPosition) const {
+  if (onlyPosition) {
+    throw std::logic_error("'onlyPosition = true' not implemented.");
+  }
+  RowVecR<4> mean;
+  MatrixR<4> covariance;
+  std::tie(mean, covariance) = this->Project(rMean, rCovariance);
+  MatrixR<-1, 4> distances(rMeasurements.size(), 4);
+  auto pos = 0;
+  for (const auto &r_box : rMeasurements) {
+    distances.row(pos++) = r_box - mean;
+  }
+  MatrixR<-1, -1> factor = covariance.llt().matrixL();
+  Eigen::ArrayXXf z = factor.triangularView<Eigen::Lower>()
+                          .solve<Eigen::OnTheRight>(distances)
+                          .transpose()
+                          .array();
+  auto squared_maha = (z * z).matrix().colwise().sum();
+
+  return squared_maha;
+}
+
 std::pair<RowVecR<8>, MatrixR<8>> KalmanFilter::Initiate(
     const RowVecR<4> &rMeasurement) const {
   RowVecR<8> mean;
@@ -69,7 +95,7 @@ std::pair<RowVecR<8>, MatrixR<8>> KalmanFilter::Initiate(
   return std::make_pair(mean, covariance);
 }
 
-void KalmanFilter::Predict(RowVecR<8> &rMean, MatrixR<8> &rCovariance) const {
+void KalmanFilter::Predict(RowVecRU<8> &rMean, MatrixRU<8> &rCovariance) const {
   // TODO: Look into MultiPredict
   RowVecA<8> std_pos_vel;
   // clang-format off

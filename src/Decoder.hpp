@@ -3,10 +3,11 @@
 
 #include <torch/torch.h>
 
-#include <array>
 #include <opencv2/opencv.hpp>
 #include <tuple>
 #include <utility>
+
+#include "DataType.hpp"
 
 namespace fairmot {
 class Decoder {
@@ -20,10 +21,9 @@ class Decoder {
 
  private:
   void CtdetPostProcess(torch::Tensor &rDetections,
-                        const std::array<double, 2> &rCenter,
-                        const double scale,
-                        const std::array<int, 2> &rOutputSize);
-  torch::Tensor Nms(const torch::Tensor &rHeatmap, int kernel = 3);
+                        const Vec2D<double> &rCenter, const double scale,
+                        const Vec2D<int> &rOutputSize);
+  torch::Tensor Nms(const torch::Tensor &rHeatmap, const int kernel = 3);
 
   torch::Tensor PostProcess(const torch::Tensor &rDetections,
                             const cv::Size &rOrigShape,

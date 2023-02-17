@@ -14,8 +14,7 @@ class STrack {
  public:
   static const KalmanFilter kSharedKalman;
 
-  STrack(const BBox &rTlwh, const float score, const Embedding &rFeat,
-         const int bufferSize = 30);
+  STrack(const BBox &rTlwh, const float score, const Embedding &rFeat);
 
   friend std::ostream &operator<<(std::ostream &rOStream,
                                   const STrack &rSTrack);
@@ -65,8 +64,8 @@ class STrack {
   int mStartFrame = 0;
   int mTrackletLen = 0;
 
-  RowVecR<8> mMean;
-  MatrixR<8> mCovariance;
+  RowVecRU<8> mMean;
+  MatrixRU<8> mCovariance;
 
  private:
   BBox mTlwhCache;

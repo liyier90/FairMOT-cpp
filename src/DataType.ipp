@@ -12,19 +12,17 @@
 
 namespace fairmot {
 // Trick to specialize alias templates
-template <int... Sizes>
-struct MatrixRHelper {};
+template <typename Scalar, int... Sizes>
+struct ArrayRHelper {};
 
-template <int Rows, int Cols>
-struct MatrixRHelper<Rows, Cols> {
-  using Type =
-      Eigen::Matrix<float, Rows, Cols, Eigen::RowMajor | Eigen::DontAlign>;
+template <typename Scalar, int Rows, int Cols>
+struct ArrayRHelper<Scalar, Rows, Cols> {
+  using Type = Eigen::Array<Scalar, Rows, Cols, Eigen::RowMajor>;
 };
 
-template <int Rows>
-struct MatrixRHelper<Rows> {
-  using Type =
-      Eigen::Matrix<float, Rows, Rows, Eigen::RowMajor | Eigen::DontAlign>;
+template <typename Scalar, int Rows>
+struct ArrayRHelper<Scalar, Rows> {
+  using Type = Eigen::Array<Scalar, Rows, Rows, Eigen::RowMajor>;
 };
 
 template <int... Sizes>
@@ -40,17 +38,32 @@ struct MatrixHelper<Rows> {
   using Type = Eigen::Matrix<float, Rows, Rows>;
 };
 
-template <typename Scalar, int... Sizes>
-struct ArrayRHelper {};
+template <int... Sizes>
+struct MatrixRHelper {};
 
-template <typename Scalar, int Rows, int Cols>
-struct ArrayRHelper<Scalar, Rows, Cols> {
-  using Type = Eigen::Array<Scalar, Rows, Cols, Eigen::RowMajor>;
+template <int Rows, int Cols>
+struct MatrixRHelper<Rows, Cols> {
+  using Type = Eigen::Matrix<float, Rows, Cols, Eigen::RowMajor>;
 };
 
-template <typename Scalar, int Rows>
-struct ArrayRHelper<Scalar, Rows> {
-  using Type = Eigen::Array<Scalar, Rows, Rows, Eigen::RowMajor>;
+template <int Rows>
+struct MatrixRHelper<Rows> {
+  using Type = Eigen::Matrix<float, Rows, Rows, Eigen::RowMajor>;
+};
+
+template <int... Sizes>
+struct MatrixRUHelper {};
+
+template <int Rows, int Cols>
+struct MatrixRUHelper<Rows, Cols> {
+  using Type =
+      Eigen::Matrix<float, Rows, Cols, Eigen::RowMajor | Eigen::DontAlign>;
+};
+
+template <int Rows>
+struct MatrixRUHelper<Rows> {
+  using Type =
+      Eigen::Matrix<float, Rows, Rows, Eigen::RowMajor | Eigen::DontAlign>;
 };
 }  // namespace fairmot
 

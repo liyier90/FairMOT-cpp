@@ -16,17 +16,14 @@
 namespace fairmot {
 const KalmanFilter STrack::kSharedKalman;
 
-// STrack::STrack(const BBox &rTlwh, const float score,
-//                const std::vector<float> &rFeat, const int bufferSize)
-STrack::STrack(const BBox &rTlwh, const float score, const Embedding &rFeat,
-               const int bufferSize)
+STrack::STrack(const BBox &rTlwh, const float score, const Embedding &rFeat)
     : mCurrFeat(),
       mSmoothFeat(),
       mTlwh(),
       mXyxy(),
       mScore{score},
-      mMean{RowVecR<8>::Zero()},
-      mCovariance{MatrixR<8>::Zero()},
+      mMean{RowVecRU<8>::Zero()},
+      mCovariance{MatrixRU<8>::Zero()},
       mTlwhCache{rTlwh} {
   this->UpdateTlwh();
   this->UpdateXyxy();
@@ -216,10 +213,11 @@ void RemoveDuplicateStracks(const std::vector<STrack> &rStracks1,
                             std::vector<STrack> &rRes1,
                             std::vector<STrack> &rRes2) {
   const auto distances = matching::IouDistance(rStracks1, rStracks2);
+  const auto num_cols = rStracks2.size();
   std::vector<std::pair<int, int>> pairs;
-  for (auto i = 0u; i < distances.size(); ++i) {
-    for (auto j = 0u; j < distances[i].size(); ++j) {
-      if (distances[i][j] < 0.15) {
+  for (auto i = 0u; i < rStracks1.size(); ++i) {
+    for (auto j = 0u; j < num_cols; ++j) {
+      if (distances[i * num_cols + j] < 0.15) {
         pairs.push_back(std::make_pair(i, j));
       }
     }
