@@ -1,6 +1,7 @@
 #ifndef SRC_STRACK_HPP_
 #define SRC_STRACK_HPP_
 
+#include <Eigen/Core>
 #include <iostream>
 #include <vector>
 
@@ -12,6 +13,8 @@ enum class TrackState { kNEW = 0, kTRACKED, kLOST, kREMOVED };
 
 class STrack {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
   static const KalmanFilter kSharedKalman;
 
   STrack(const BBox &rTlwh, const float score, const Embedding &rFeat);
@@ -22,7 +25,11 @@ class STrack {
   friend std::ostream &operator<<(std::ostream &rOStream,
                                   const STrack *const pSTrack);
 
+  friend std::ostream &operator<<(std::ostream &rOStream, STrackPtr pSTrack);
+
   static void MultiPredict(const std::vector<STrack *> &rStracks);
+
+  static void MultiPredict(const std::vector<STrackPtr> &rStracks);
 
   static const BBox &rXyxyToTlwh(BBox &rXyxy);
 
@@ -34,13 +41,13 @@ class STrack {
 
   int NextId();
 
-  void ReActivate(const STrack *const pOther, const int frameId,
+  void ReActivate(const STrackPtr pOther, const int frameId,
                   const bool newId = false);
 
   RowVecR<4> TlwhToXyah(const BBox &rTlwh) const;
   RowVecR<4> ToXyah() const;
 
-  void Update(const STrack *const pOther, const int frameId,
+  void Update(const STrackPtr pOther, const int frameId,
               const bool updateFeature = true);
 
   void UpdateFeatures(const Embedding &rFeat);
@@ -64,8 +71,8 @@ class STrack {
   int mStartFrame = 0;
   int mTrackletLen = 0;
 
-  RowVecRU<8> mMean;
-  MatrixRU<8> mCovariance;
+  RowVecR<8> mMean;
+  MatrixR<8> mCovariance;
 
  private:
   BBox mTlwhCache;
@@ -73,19 +80,17 @@ class STrack {
 };
 
 namespace strack_util {
-std::vector<STrack *> CombineStracks(const std::vector<STrack *> &rStracks1,
-                                     const std::vector<STrack> &rStracks2);
+std::vector<STrackPtr> CombineStracks(const std::vector<STrackPtr> &rStracks1,
+                                      const std::vector<STrackPtr> &rStracks2);
 
-std::vector<STrack> CombineStracks(const std::vector<STrack> &rStracks1,
-                                   const std::vector<STrack> &rStracks2);
+std::vector<STrackPtr> SubstractStracks(
+    const std::vector<STrackPtr> &rStracks1,
+    const std::vector<STrackPtr> &rStracks2);
 
-std::vector<STrack> SubstractStracks(const std::vector<STrack> &rStracks1,
-                                     const std::vector<STrack> &rStracks2);
-
-void RemoveDuplicateStracks(const std::vector<STrack> &rStracks1,
-                            const std::vector<STrack> &rStracks2,
-                            std::vector<STrack> &rRes1,
-                            std::vector<STrack> &rRes2);
+void RemoveDuplicateStracks(const std::vector<STrackPtr> &rStracks1,
+                            const std::vector<STrackPtr> &rStracks2,
+                            std::vector<STrackPtr> &rRes1,
+                            std::vector<STrackPtr> &rRes2);
 }  // namespace strack_util
 }  // namespace fairmot
 

@@ -28,7 +28,7 @@ class KalmanFilter {
   std::pair<RowVecR<8>, MatrixR<8>> Initiate(
       const RowVecR<4> &rMeasurement) const;
 
-  void Predict(RowVecRU<8> &rMean, MatrixRU<8> &rCovariance) const;
+  void Predict(RowVecR<8> &rMean, MatrixR<8> &rCovariance) const;
 
   std::pair<RowVecR<4>, MatrixR<4>> Project(
       const RowVecR<8> &rMean, const MatrixR<8> &rCovariance) const;

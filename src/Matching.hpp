@@ -9,24 +9,24 @@
 
 namespace fairmot {
 namespace matching {
-void EmbeddingDistance(const std::vector<STrack *> &rTracks,
-                       const std::vector<STrack> &rDetections,
+void EmbeddingDistance(const std::vector<STrackPtr> &rTracks,
+                       const std::vector<STrackPtr> &rDetections,
                        std::vector<float> &rCostMatrix, int &rNumRows,
                        int &rNumCols);
 
 void FuseMotion(const KalmanFilter &rKalmanFilter,
-                const std::vector<STrack *> &rTracks,
-                const std::vector<STrack> rDetections,
+                const std::vector<STrackPtr> &rTracks,
+                const std::vector<STrackPtr> rDetections,
                 std::vector<float> &rCostMatrix, const int numCols,
                 const bool onlyPosition = false, const float coeff = 0.98);
 
 float GetArea(const BBox &rXyxy);
 
-std::vector<float> IouDistance(const std::vector<STrack> &rTracks1,
-                               const std::vector<STrack> &rTracks2);
+std::vector<float> IouDistance(const std::vector<STrackPtr> &rTracks1,
+                               const std::vector<STrackPtr> &rTracks2);
 
-std::vector<float> IouDistance(const std::vector<STrack *> &rTracks1,
-                               const std::vector<STrack> &rTracks2,
+std::vector<float> IouDistance(const std::vector<STrackPtr> &rTracks1,
+                               const std::vector<STrackPtr> &rTracks2,
                                int &rNumRows, int &rNumCols);
 
 std::vector<float> Ious(const std::vector<BBox> &rXyxys1,

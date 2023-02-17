@@ -22,8 +22,8 @@ STrack::STrack(const BBox &rTlwh, const float score, const Embedding &rFeat)
       mTlwh(),
       mXyxy(),
       mScore{score},
-      mMean{RowVecRU<8>::Zero()},
-      mCovariance{MatrixRU<8>::Zero()},
+      mMean{RowVecR<8>::Zero()},
+      mCovariance{MatrixR<8>::Zero()},
       mTlwhCache{rTlwh} {
   this->UpdateTlwh();
   this->UpdateXyxy();
@@ -44,6 +44,13 @@ std::ostream &operator<<(std::ostream &rOStream, const STrack *const pSTrack) {
   return rOStream;
 }
 
+std::ostream &operator<<(std::ostream &rOStream, STrackPtr pSTrack) {
+  rOStream << "OT_" << pSTrack->mTrackId << "_(" << pSTrack->mStartFrame << "-"
+           << pSTrack->rEndFrame() << ")";
+
+  return rOStream;
+}
+
 void STrack::MultiPredict(const std::vector<STrack *> &rStracks) {
   for (const auto &r_track : rStracks) {
     if (r_track->mState != TrackState::kTRACKED) {
@@ -52,6 +59,17 @@ void STrack::MultiPredict(const std::vector<STrack *> &rStracks) {
     STrack::kSharedKalman.Predict(r_track->mMean, r_track->mCovariance);
     r_track->UpdateTlwh();
     r_track->UpdateXyxy();
+  }
+}
+
+void STrack::MultiPredict(const std::vector<STrackPtr> &rStracks) {
+  for (auto p_track : rStracks) {
+    if (p_track->mState != TrackState::kTRACKED) {
+      p_track->mMean[7] = 0.0;
+    }
+    STrack::kSharedKalman.Predict(p_track->mMean, p_track->mCovariance);
+    p_track->UpdateTlwh();
+    p_track->UpdateXyxy();
   }
 }
 
@@ -79,7 +97,7 @@ int STrack::NextId() {
   return count;
 }
 
-void STrack::ReActivate(const STrack *const pOther, const int frameId,
+void STrack::ReActivate(const STrackPtr pOther, const int frameId,
                         const bool newId) {
   mFrameId = frameId;
   mTrackletLen = 0;
@@ -115,7 +133,7 @@ const BBox &STrack::rXyxyToTlwh(BBox &rXyxy) {
   return std::move(rXyxy);
 }
 
-void STrack::Update(const STrack *const pOther, const int frameId,
+void STrack::Update(const STrackPtr pOther, const int frameId,
                     const bool updateFeature) {
   mFrameId = frameId;
   ++mTrackletLen;
@@ -173,33 +191,15 @@ void STrack::UpdateXyxy() {
 }
 
 namespace strack_util {
-std::vector<STrack *> CombineStracks(const std::vector<STrack *> &rStracks1,
-                                     const std::vector<STrack> &rStracks2) {
+std::vector<STrackPtr> CombineStracks(const std::vector<STrackPtr> &rStracks1,
+                                      const std::vector<STrackPtr> &rStracks2) {
   std::unordered_set<int> exists;
   auto res = rStracks1;
   for (const auto &r_strack : rStracks1) {
     exists.insert(r_strack->mTrackId);
   }
   for (const auto &r_strack : rStracks2) {
-    const auto tid = r_strack.mTrackId;
-    if (exists.count(tid) == 0) {
-      exists.insert(tid);
-      res.push_back(const_cast<STrack *>(&r_strack));
-    }
-  }
-
-  return res;
-}
-
-std::vector<STrack> CombineStracks(const std::vector<STrack> &rStracks1,
-                                   const std::vector<STrack> &rStracks2) {
-  std::unordered_set<int> exists;
-  auto res = rStracks1;
-  for (const auto &r_strack : rStracks1) {
-    exists.insert(r_strack.mTrackId);
-  }
-  for (const auto &r_strack : rStracks2) {
-    const auto tid = r_strack.mTrackId;
+    const auto tid = r_strack->mTrackId;
     if (exists.count(tid) == 0) {
       res.push_back(r_strack);
     }
@@ -208,10 +208,32 @@ std::vector<STrack> CombineStracks(const std::vector<STrack> &rStracks1,
   return res;
 }
 
-void RemoveDuplicateStracks(const std::vector<STrack> &rStracks1,
-                            const std::vector<STrack> &rStracks2,
-                            std::vector<STrack> &rRes1,
-                            std::vector<STrack> &rRes2) {
+std::vector<STrackPtr> SubstractStracks(
+    const std::vector<STrackPtr> &rStracks1,
+    const std::vector<STrackPtr> &rStracks2) {
+  std::unordered_map<int, STrackPtr> stracks;
+  for (const auto &r_track : rStracks1) {
+    stracks.insert(std::make_pair(r_track->mTrackId, r_track));
+  }
+  for (const auto &r_track : rStracks2) {
+    const auto tid = r_track->mTrackId;
+    if (stracks.count(tid) != 0) {
+      stracks.erase(tid);
+    }
+  }
+  std::vector<STrackPtr> res;
+  res.reserve(stracks.size());
+  for (const auto &r_track : stracks) {
+    res.push_back(r_track.second);
+  }
+
+  return res;
+}
+
+void RemoveDuplicateStracks(const std::vector<STrackPtr> &rStracks1,
+                            const std::vector<STrackPtr> &rStracks2,
+                            std::vector<STrackPtr> &rRes1,
+                            std::vector<STrackPtr> &rRes2) {
   const auto distances = matching::IouDistance(rStracks1, rStracks2);
   const auto num_cols = rStracks2.size();
   std::vector<std::pair<int, int>> pairs;
@@ -228,8 +250,10 @@ void RemoveDuplicateStracks(const std::vector<STrack> &rStracks1,
   for (const auto &r_pair : pairs) {
     const auto idx_1 = r_pair.first;
     const auto idx_2 = r_pair.second;
-    const auto age_1 = rStracks1[idx_1].mFrameId - rStracks1[idx_1].mStartFrame;
-    const auto age_2 = rStracks2[idx_2].mFrameId - rStracks2[idx_2].mStartFrame;
+    const auto age_1 =
+        rStracks1[idx_1]->mFrameId - rStracks1[idx_1]->mStartFrame;
+    const auto age_2 =
+        rStracks2[idx_2]->mFrameId - rStracks2[idx_2]->mStartFrame;
     if (age_1 > age_2) {
       duplicates_2.push_back(idx_2);
     } else {
@@ -250,27 +274,6 @@ void RemoveDuplicateStracks(const std::vector<STrack> &rStracks1,
       rRes2.push_back(rStracks2[i]);
     }
   }
-}
-
-std::vector<STrack> SubstractStracks(const std::vector<STrack> &rStracks1,
-                                     const std::vector<STrack> &rStracks2) {
-  std::unordered_map<int, STrack> stracks;
-  for (const auto &r_track : rStracks1) {
-    stracks.insert(std::make_pair(r_track.mTrackId, r_track));
-  }
-  for (const auto &r_track : rStracks2) {
-    const auto tid = r_track.mTrackId;
-    if (stracks.count(tid) != 0) {
-      stracks.erase(tid);
-    }
-  }
-  std::vector<STrack> res;
-  res.reserve(stracks.size());
-  for (const auto &r_track : stracks) {
-    res.push_back(r_track.second);
-  }
-
-  return res;
 }
 }  // namespace strack_util
 }  // namespace fairmot

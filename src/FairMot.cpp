@@ -98,13 +98,13 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
   }
   if (verbose) std::cout << "=== mFrameId: " << mFrameId << std::endl;
 
-  std::vector<STrack> activated_stracks;
-  std::vector<STrack> refind_stracks;
-  std::vector<STrack> lost_stracks;
-  std::vector<STrack> removed_stracks;
+  std::vector<STrackPtr> activated_stracks;
+  std::vector<STrackPtr> refind_stracks;
+  std::vector<STrackPtr> lost_stracks;
+  std::vector<STrackPtr> removed_stracks;
 
   const auto num_detections = rDetections.size(0);
-  std::vector<STrack> detections;
+  std::vector<STrackPtr> detections;
 
   // Step 1: Network forward, get detections & embeddings
   if (num_detections > 0 && rEmbeddings.size(0) > 0) {
@@ -120,24 +120,24 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
       memcpy(embedding.data(), rEmbeddings[i].data_ptr<float>(),
              sizeof(float) * kEmbeddingSize);
 
-      STrack strack(STrack::rXyxyToTlwh(xyxy), score, embedding);
-      detections.push_back(strack);
+      detections.push_back(
+          STrackPtr(new STrack(STrack::rXyxyToTlwh(xyxy), score, embedding)));
     }
   }
 
-  std::vector<STrack *> tracked_stracks;
-  std::vector<STrack *> unconfirmed;
+  std::vector<STrackPtr> tracked_stracks;
+  std::vector<STrackPtr> unconfirmed;
+  std::vector<STrackPtr> strack_pool;
 
-  std::vector<STrack *> strack_pool;
   // Add newly detected tracklets to tracked_stracks
   for (auto i = 0u; i < mTrackedStracks.size(); ++i) {
-    if (mTrackedStracks[i].mIsActivated) {
+    if (mTrackedStracks[i]->mIsActivated) {
       // Active tracks are added to the local list 'tracked_stracks'
-      tracked_stracks.push_back(&mTrackedStracks[i]);
+      tracked_stracks.push_back(mTrackedStracks[i]);
     } else {
       // previous tracks which are not active in the current frame are added in
       // unconfirmed list
-      unconfirmed.push_back(&mTrackedStracks[i]);
+      unconfirmed.push_back(mTrackedStracks[i]);
     }
   }
 
@@ -150,14 +150,11 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
 
   // The dists is a matrix of distances of the detection with the tracks
   // in strack_pool
-  // std::vector<std::vector<float>> dists;
   std::vector<float> dists;
   auto num_rows = 0;
   auto num_cols = 0;
   matching::EmbeddingDistance(strack_pool, detections, dists, num_rows,
                               num_cols);
-  // matching::FuseMotion(STrack::kSharedKalman, strack_pool, detections,
-  // dists);
   matching::FuseMotion(STrack::kSharedKalman, strack_pool, detections, dists,
                        num_cols);
 
@@ -171,22 +168,22 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
 
   for (const auto &r_match : matches) {
     // 1st element is the id of the track and 2nd element is the detection
-    auto *p_track = strack_pool[r_match.first];
-    auto *p_det = &detections[r_match.second];
+    auto p_track = strack_pool[r_match.first];
+    auto p_det = detections[r_match.second];
     if (p_track->mState == TrackState::kTRACKED) {
       // If the track is active, add the detection to the track
       p_track->Update(p_det, mFrameId);
-      activated_stracks.push_back(*p_track);
+      activated_stracks.push_back(p_track);
     } else {
       // We have obtained a detection from a track which is not active, hence
       // put the track in refind_stracks
       p_track->ReActivate(p_det, mFrameId);
-      refind_stracks.push_back(*p_track);
+      refind_stracks.push_back(p_track);
     }
   }
   // None of the steps below happen if there are no undetected tracks.
   // Step 3: Second association, with IOU
-  std::vector<STrack> detections_tmp;
+  std::vector<STrackPtr> detections_tmp;
   detections_tmp.reserve(u_detection.size());
   for (const auto &r_idx : u_detection) {
     detections_tmp.push_back(detections[r_idx]);
@@ -195,7 +192,7 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
   detections = std::move(detections_tmp);
   // This is container for stracks which were tracked till the
   // previous frame but no detection was found for it in the current frame
-  std::vector<STrack *> r_tracked_stracks;
+  std::vector<STrackPtr> r_tracked_stracks;
   for (const auto &r_idx : u_track) {
     if (strack_pool[r_idx]->mState == TrackState::kTRACKED) {
       r_tracked_stracks.push_back(strack_pool[r_idx]);
@@ -215,23 +212,23 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
   // Same process done for some unmatched detections, but now considering
   // IOU_distance as measure
   for (const auto &r_match : matches) {
-    auto *p_track = r_tracked_stracks[r_match.first];
-    auto *p_det = &detections[r_match.second];
+    auto p_track = r_tracked_stracks[r_match.first];
+    auto p_det = detections[r_match.second];
     if (p_track->mState == TrackState::kTRACKED) {
       p_track->Update(p_det, mFrameId);
-      activated_stracks.push_back(*p_track);
+      activated_stracks.push_back(p_track);
     } else {
       p_track->ReActivate(p_det, mFrameId);
-      refind_stracks.push_back(*p_track);
+      refind_stracks.push_back(p_track);
     }
   }
   // If no detections are obtained for tracks(u_track), the tracks are added to
   // lost_tracks and are marked lost
   for (const auto &r_idx : u_track) {
-    auto *p_track = r_tracked_stracks[r_idx];
+    auto p_track = r_tracked_stracks[r_idx];
     if (p_track->mState != TrackState::kLOST) {
       p_track->MarkLost();
-      lost_stracks.push_back(*p_track);
+      lost_stracks.push_back(p_track);
     }
   }
 
@@ -252,42 +249,42 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
                              matches, u_unconfirmed, u_detection);
 
   for (const auto &r_match : matches) {
-    auto *p_track = unconfirmed[r_match.first];
-    p_track->Update(&detections[r_match.second], mFrameId);
-    activated_stracks.push_back(*p_track);
+    auto p_track = unconfirmed[r_match.first];
+    p_track->Update(detections[r_match.second], mFrameId);
+    activated_stracks.push_back(p_track);
   }
   for (const auto &r_idx : u_unconfirmed) {
-    auto *p_track = unconfirmed[r_idx];
+    auto p_track = unconfirmed[r_idx];
     p_track->MarkRemoved();
-    removed_stracks.push_back(*p_track);
+    removed_stracks.push_back(p_track);
   }
 
   // After all these confirmation steps, if a new detection is found, it is
   // initialized for a new track
   // Step 4: Init new stracks
   for (const auto &r_u_det : u_detection) {
-    auto *p_track = &detections[r_u_det];
+    auto p_track = detections[r_u_det];
     if (p_track->mScore < mScoreThreshold) {
       continue;
     }
     p_track->Activate(mFrameId);
-    activated_stracks.push_back(*p_track);
+    activated_stracks.push_back(p_track);
   }
   // Step 5: Update state
   // If the tracks are lost for more frames than the threshold number, the
   // tracks are removed.
-  for (auto &r_track : mLostStracks) {
-    if (mFrameId - r_track.rEndFrame() > mMaxTimeLost) {
-      r_track.MarkRemoved();
-      removed_stracks.push_back(r_track);
+  for (auto p_track : mLostStracks) {
+    if (mFrameId - p_track->rEndFrame() > mMaxTimeLost) {
+      p_track->MarkRemoved();
+      removed_stracks.push_back(p_track);
     }
   }
   // Update the mTrackedStracks and mLostStracks using the updates in this
   // step.
-  std::vector<STrack> tracked_stracks_swap;
+  std::vector<STrackPtr> tracked_stracks_swap;
   tracked_stracks_swap.reserve(mTrackedStracks.size());
-  for (auto &r_track : mTrackedStracks) {
-    if (r_track.mState == TrackState::kTRACKED) {
+  for (const auto &r_track : mTrackedStracks) {
+    if (r_track->mState == TrackState::kTRACKED) {
       tracked_stracks_swap.push_back(r_track);
     }
   }
@@ -306,8 +303,8 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
     mRemoveStracks.push_back(r_track);
   }
 
-  std::vector<STrack> res_1;
-  std::vector<STrack> res_2;
+  std::vector<STrackPtr> res_1;
+  std::vector<STrackPtr> res_2;
   strack_util::RemoveDuplicateStracks(mTrackedStracks, mLostStracks, res_1,
                                       res_2);
   mTrackedStracks = std::move(res_1);
@@ -315,8 +312,8 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
 
   std::vector<STrack> output_stracks;
   for (const auto &r_track : mTrackedStracks) {
-    if (r_track.mIsActivated) {
-      output_stracks.push_back(r_track);
+    if (r_track->mIsActivated) {
+      output_stracks.push_back(*r_track);
     }
   }
 

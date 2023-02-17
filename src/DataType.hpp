@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <vector>
 
 namespace fairmot {
@@ -12,6 +13,9 @@ static constexpr std::size_t kEmbeddingSize = 128;
 
 typedef std::array<float, kBBoxSize> BBox;
 typedef std::array<float, kEmbeddingSize> Embedding;
+
+class STrack;
+typedef std::shared_ptr<STrack> STrackPtr;
 
 struct TrackOutput {
   BBox tlwh;
@@ -47,15 +51,6 @@ struct MatrixRHelper<Rows, Cols>;
 template <int Rows>
 struct MatrixRHelper<Rows>;
 
-template <int... Sizes>
-struct MatrixRUHelper;
-
-template <int Rows, int Cols>
-struct MatrixRUHelper<Rows, Cols>;
-
-template <int Rows>
-struct MatrixRUHelper<Rows>;
-
 template <typename Scalar, int... Sizes>
 using ArrayR = typename ArrayRHelper<Scalar, Sizes...>::Type;
 
@@ -65,18 +60,11 @@ using Matrix = typename MatrixHelper<Sizes...>::Type;
 template <int... Sizes>
 using MatrixR = typename MatrixRHelper<Sizes...>::Type;
 
-template <int... Sizes>
-using MatrixRU = typename MatrixRUHelper<Sizes...>::Type;
-
 template <int NumCols>
 using RowVecA = Eigen::Array<float, 1, NumCols>;
 
 template <int NumCols>
 using RowVecR = Eigen::Matrix<float, 1, NumCols, Eigen::RowMajor>;
-
-template <int NumCols>
-using RowVecRU =
-    Eigen::Matrix<float, 1, NumCols, Eigen::RowMajor | Eigen::DontAlign>;
 
 template <typename Scalar>
 using Vec2D = std::array<Scalar, 2>;

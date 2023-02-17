@@ -50,21 +50,6 @@ template <int Rows>
 struct MatrixRHelper<Rows> {
   using Type = Eigen::Matrix<float, Rows, Rows, Eigen::RowMajor>;
 };
-
-template <int... Sizes>
-struct MatrixRUHelper {};
-
-template <int Rows, int Cols>
-struct MatrixRUHelper<Rows, Cols> {
-  using Type =
-      Eigen::Matrix<float, Rows, Cols, Eigen::RowMajor | Eigen::DontAlign>;
-};
-
-template <int Rows>
-struct MatrixRUHelper<Rows> {
-  using Type =
-      Eigen::Matrix<float, Rows, Rows, Eigen::RowMajor | Eigen::DontAlign>;
-};
 }  // namespace fairmot
 
 #endif  // SRC_DATATYPE_IPP_

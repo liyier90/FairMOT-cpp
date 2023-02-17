@@ -95,7 +95,7 @@ std::pair<RowVecR<8>, MatrixR<8>> KalmanFilter::Initiate(
   return std::make_pair(mean, covariance);
 }
 
-void KalmanFilter::Predict(RowVecRU<8> &rMean, MatrixRU<8> &rCovariance) const {
+void KalmanFilter::Predict(RowVecR<8> &rMean, MatrixR<8> &rCovariance) const {
   // TODO: Look into MultiPredict
   RowVecA<8> std_pos_vel;
   // clang-format off

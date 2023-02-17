@@ -12,8 +12,8 @@
 
 namespace fairmot {
 namespace matching {
-void EmbeddingDistance(const std::vector<STrack *> &rTracks,
-                       const std::vector<STrack> &rDetections,
+void EmbeddingDistance(const std::vector<STrackPtr> &rTracks,
+                       const std::vector<STrackPtr> &rDetections,
                        std::vector<float> &rCostMatrix, int &rNumRows,
                        int &rNumCols) {
   rNumRows = rTracks.size();
@@ -29,7 +29,7 @@ void EmbeddingDistance(const std::vector<STrack *> &rTracks,
 
     for (int j = 0; j < rNumCols; ++j) {
       RowVecR<128> det_feature = Eigen::Map<const RowVecR<128>>(
-          rDetections[j].mCurrFeat.data(), rDetections[j].mCurrFeat.size());
+          rDetections[j]->mCurrFeat.data(), rDetections[j]->mCurrFeat.size());
       rCostMatrix.push_back(1.0 - track_feature.dot(det_feature) /
                                       track_feature.norm() /
                                       det_feature.norm());
@@ -38,8 +38,8 @@ void EmbeddingDistance(const std::vector<STrack *> &rTracks,
 }
 
 void FuseMotion(const KalmanFilter &rKalmanFilter,
-                const std::vector<STrack *> &rTracks,
-                const std::vector<STrack> rDetections,
+                const std::vector<STrackPtr> &rTracks,
+                const std::vector<STrackPtr> rDetections,
                 std::vector<float> &rCostMatrix, const int numCols,
                 const bool onlyPosition, const float coeff) {
   if (rCostMatrix.size() == 0) {
@@ -50,7 +50,7 @@ void FuseMotion(const KalmanFilter &rKalmanFilter,
   std::vector<RowVecR<4>, Eigen::aligned_allocator<RowVecR<4>>> measurements;
   measurements.reserve(rDetections.size());
   for (const auto &r_det : rDetections) {
-    measurements.push_back(r_det.ToXyah());
+    measurements.push_back(r_det->ToXyah());
   }
   for (auto i = 0u; i < rTracks.size(); ++i) {
     const auto gating_distance = rKalmanFilter.GatingDistance(
@@ -71,9 +71,9 @@ inline float GetArea(const BBox &rXyxy) {
   return (rXyxy[2] - rXyxy[0] + 1.0) * (rXyxy[3] - rXyxy[1] + 1.0);
 }
 
-std::vector<float> IouDistance(const std::vector<STrack> &rTracks1,
-                               const std::vector<STrack> &rTracks2) {
-  auto extract_xyxy = [](const STrack &r_track) { return r_track.mXyxy; };
+std::vector<float> IouDistance(const std::vector<STrackPtr> &rTracks1,
+                               const std::vector<STrackPtr> &rTracks2) {
+  auto extract_xyxy = [](STrackPtr p_track) { return p_track->mXyxy; };
   std::vector<BBox> xyxys_1;
   std::vector<BBox> xyxys_2;
 
@@ -89,9 +89,10 @@ std::vector<float> IouDistance(const std::vector<STrack> &rTracks1,
   return ious;
 }
 
-std::vector<float> IouDistance(const std::vector<STrack *> &rTracks1,
-                               const std::vector<STrack> &rTracks2,
+std::vector<float> IouDistance(const std::vector<STrackPtr> &rTracks1,
+                               const std::vector<STrackPtr> &rTracks2,
                                int &rNumRows, int &rNumCols) {
+  auto extract_xyxy = [](STrackPtr p_track) { return p_track->mXyxy; };
   rNumRows = rTracks1.size();
   rNumCols = rTracks2.size();
 
@@ -99,9 +100,9 @@ std::vector<float> IouDistance(const std::vector<STrack *> &rTracks1,
   std::vector<BBox> xyxys_2;
 
   std::transform(rTracks1.begin(), rTracks1.end(), std::back_inserter(xyxys_1),
-                 [](const STrack *const p_track) { return p_track->mXyxy; });
+                 extract_xyxy);
   std::transform(rTracks2.begin(), rTracks2.end(), std::back_inserter(xyxys_2),
-                 [](const STrack &r_track) { return r_track.mXyxy; });
+                 extract_xyxy);
 
   auto ious = Ious(xyxys_1, xyxys_2);
   std::for_each(ious.begin(), ious.end(),

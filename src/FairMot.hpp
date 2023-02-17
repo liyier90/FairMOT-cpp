@@ -50,9 +50,9 @@ class FairMot {
 
   int mFrameId;
 
-  std::vector<STrack> mLostStracks;
-  std::vector<STrack> mTrackedStracks;
-  std::vector<STrack> mRemoveStracks;
+  std::vector<STrackPtr> mLostStracks;
+  std::vector<STrackPtr> mTrackedStracks;
+  std::vector<STrackPtr> mRemoveStracks;
 };
 }  // namespace fairmot
 
