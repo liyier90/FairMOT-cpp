@@ -161,8 +161,9 @@ void LinearAssignment(const std::vector<float> &rCostMatrix, const int numRows,
 
   std::vector<int> rowsol;
   std::vector<int> colsol;
-  const auto cost = util::Lapjv(rCostMatrix, numRows, numCols, rowsol, colsol,
-                                /*extendCost=*/true, threshold);
+  const auto cost = util::Lap(rCostMatrix, numRows, numCols, rowsol, colsol,
+                              /*extendCost=*/true, threshold);
+
   for (auto i = 0u; i < rowsol.size(); ++i) {
     int index = static_cast<int>(i);
     if (rowsol[i] >= 0) {

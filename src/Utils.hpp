@@ -27,10 +27,9 @@ Vec2D<double> GetDir(const torch::ArrayRef<double> &rSrcPoint,
 void GetThirdPoint(const cv::Point2f &rPoint1, const cv::Point2f &rPoint2,
                    cv::Point2f &rThirdPoint);
 
-double Lapjv(const std::vector<float> &rCost, const int numRows,
-             const int numCols, std::vector<int> &rRowsol,
-             std::vector<int> &rColsol, bool extendCost = false,
-             float costLimit = FLT_MAX, bool returnCost = true);
+float Lap(const std::vector<float> &rCost, const int numRows, const int numCols,
+          std::vector<int> &rRowsol, std::vector<int> &rColsol,
+          bool extendCost = false, float costLimit = FLT_MAX);
 
 cv::Mat Letterbox(cv::Mat image, int targetHeight, int targetWidth);
 

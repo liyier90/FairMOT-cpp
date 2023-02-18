@@ -30,7 +30,8 @@ set(FairMOT_CXX_WARNING_FLAGS "\
 )
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FairMOT_CXX_WARNING_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} \
+    -fopenmp -ftree-vectorize -march=native")
 
 if (FairMOT_PROFILE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
@@ -41,7 +42,6 @@ set(SOURCES
     src/Decoder.cpp
     src/FairMot.cpp
     src/KalmanFilter.cpp
-    src/Lapjv.cpp
     src/Matching.cpp
     src/STrack.cpp
     src/Utils.cpp

@@ -31,7 +31,8 @@ int main(int argc, char *argv[]) {
 
 int ProcessVideo(const fs::path &rVideoPath) {
   std::string model_path = "../weights/fairmot_dla34_jit.pth";
-  fairmot::FairMot tracker(model_path, /*frameRate=*/30.0, /*maxPerImage=*/500,
+  fairmot::FairMot tracker(model_path, /*frameRate=*/30.0,
+                           /*maxPerImage=*/500,
                            /*trackBuffer=*/30);
 
   auto output_dir = rVideoPath.parent_path().parent_path() / "results";

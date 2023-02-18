@@ -8,6 +8,7 @@
 #include <array>
 #include <cfloat>
 #include <cmath>
+#include <iostream>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
 #include <sstream>
@@ -15,9 +16,12 @@
 #include <string>
 #include <vector>
 
+#include "Cpuid.hpp"
 #include "DataType.hpp"
-#include "Lapjv.hpp"
+#include "Lap.hpp"
 #include "STrack.hpp"
+
+static SIMDFlags simd_flags;
 
 namespace fairmot {
 namespace util {
@@ -81,67 +85,52 @@ void GetThirdPoint(const cv::Point2f &rPoint1, const cv::Point2f &rPoint2,
   rThirdPoint.y = rPoint2.y + rPoint2.x - rPoint1.x;
 }
 
-double Lapjv(const std::vector<float> &rCost, const int numRows,
-             const int numCols, std::vector<int> &rRowsol,
-             std::vector<int> &rColsol, bool extendCost, float costLimit,
-             bool returnCost) {
+float Lap(const std::vector<float> &rCost, const int numRows, const int numCols,
+          std::vector<int> &rRowsol, std::vector<int> &rColsol, bool extendCost,
+          float costLimit) {
   ArrayR<float, -1> cost_f(numRows, numCols);
   Map<ArrayR<float, -1>, ArrayR<float, 1, -1>, float>(cost_f, rCost, numRows,
                                                       numCols);
-  ArrayR<double, -1> cost_d = cost_f.cast<double>();
 
   if (numRows != numCols && !extendCost) {
     throw std::logic_error(
-        "Square cost array expected. Pass extendCost = true if non-square cost "
-        "is intentional");
+        "Square cost array expected. Pass extendCost = true if non-square "
+        "cost is intentional");
   }
 
   auto n = numRows;
   if (extendCost || costLimit < FLT_MAX) {
     n = numRows + numCols;
-    cost_d.conservativeResize(n, n);
-    const auto max_cost = cost_d.maxCoeff();
-    cost_d.topRightCorner(numRows, n - numCols) =
+    cost_f.conservativeResize(n, n);
+    const auto max_cost = cost_f.maxCoeff();
+    cost_f.topRightCorner(numRows, n - numCols) =
         costLimit < FLT_MAX ? costLimit / 2.0 : max_cost;
-    cost_d.bottomLeftCorner(n - numRows, numCols) =
+    cost_f.bottomLeftCorner(n - numRows, numCols) =
         costLimit < FLT_MAX ? costLimit / 2.0 : max_cost;
-    cost_d.bottomRightCorner(n - numRows, n - numCols) = 0.0;
+    cost_f.bottomRightCorner(n - numRows, n - numCols) = 0.0;
   }
 
-  auto **p_cost = new double *[sizeof(double *) * n];
-  for (auto i = 0; i < n; ++i) {
-    p_cost[i] = cost_d.data() + i * n;
-  }
+  auto *p_u = new float[sizeof(float) * n];
+  auto *p_v = new float[sizeof(float) * n];
 
   ArrayR<int, 1, -1> p_x_c(n);
   ArrayR<int, 1, -1> p_y_c(n);
-  auto ret = lapjv_internal(n, p_cost, p_x_c.data(), p_y_c.data());
-  if (ret != 0) {
-    throw std::logic_error("Calculate wrong!");
-  }
 
-  auto opt = 0.0;
+  auto opt = simd_flags.hasAVX2()
+                 ? lap<true, int, float>(n, cost_f.data(), /*verbose=*/false,
+                                         p_x_c.data(), p_y_c.data(), p_u, p_v)
+                 : lap<false, int, float>(n, cost_f.data(), /*verbose=*/false,
+                                          p_x_c.data(), p_y_c.data(), p_u, p_v);
+
   if (n != numRows) {
     p_x_c = (p_x_c >= static_cast<int>(numCols)).select(-1, p_x_c);
     p_y_c = (p_y_c >= static_cast<int>(numRows)).select(-1, p_y_c);
     rRowsol.assign(p_x_c.data(), p_x_c.data() + numRows);
     rColsol.assign(p_y_c.data(), p_y_c.data() + numCols);
-
-    if (returnCost) {
-      for (auto i = 0; i < numRows; ++i) {
-        if (rRowsol[i] != -1) {
-          opt += cost_d(i, rRowsol[i]);
-        }
-      }
-    }
-  } else if (returnCost) {
-    for (auto i = 0; i < numRows; ++i) {
-      opt += cost_d(i, rRowsol[i]);
-    }
   }
 
-  // Elements in p_cost are freed by Eigen
-  delete[] p_cost;
+  delete[] p_u;
+  delete[] p_v;
 
   return opt;
 }
