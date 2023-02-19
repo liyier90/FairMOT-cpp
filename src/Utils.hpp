@@ -31,7 +31,7 @@ float Lap(const std::vector<float> &rCost, const int numRows, const int numCols,
           std::vector<int> &rRowsol, std::vector<int> &rColsol,
           bool extendCost = false, float costLimit = FLT_MAX);
 
-cv::Mat Letterbox(cv::Mat image, int targetHeight, int targetWidth);
+cv::Mat Letterbox(const cv::Mat &rImage, int targetHeight, int targetWidth);
 
 void TransformCoords(torch::Tensor &rCoords, const Vec2D<double> &rCenter,
                      const double scale, const Vec2D<int> &rOutputSize);

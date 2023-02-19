@@ -35,7 +35,8 @@ class FairMot {
  private:
   std::vector<TrackOutput> Postprocess(
       const std::vector<STrack> &rOnlineTargets);
-  cv::Mat Preprocess(cv::Mat image);
+  cv::Mat Preprocess(const cv::Mat &rImage);
+  void WarmUp();
 
   torch::jit::script::Module mModel;
   torch::Device *mpDevice = nullptr;

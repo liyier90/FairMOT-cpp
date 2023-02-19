@@ -70,9 +70,9 @@ int ProcessVideo(const fs::path &rVideoPath) {
                 << " fps" << std::endl;
     }
 
-    if (cv::waitKey(1) > 0) {
-      break;
-    }
+    // if (cv::waitKey(1) > 0) {
+    //   break;
+    // }
   }
   cap.release();
   std::stringstream cmd_stream;

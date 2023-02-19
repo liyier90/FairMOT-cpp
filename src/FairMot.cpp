@@ -1,9 +1,12 @@
 #include "FairMot.hpp"
 
+#include <c10/core/InferenceMode.h>
+#include <torch/csrc/jit/runtime/graph_executor.h>
 #include <torch/torch.h>
 #include <torchvision/vision.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -16,6 +19,20 @@
 #include "Matching.hpp"
 #include "STrack.hpp"
 #include "Utils.hpp"
+
+class Timer {
+ public:
+  void Tic() { mStartTime = std::chrono::high_resolution_clock::now(); }
+  void Toc(const char *pStage) {
+    mEndTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed = mEndTime - mStartTime;
+    std::cout << pStage << " " << elapsed.count() << std::endl;
+  }
+
+ private:
+  std::chrono::system_clock::time_point mStartTime;
+  std::chrono::system_clock::time_point mEndTime;
+};
 
 namespace fairmot {
 FairMot::FairMot(const std::string &rModelPath, const double frameRate,
@@ -31,6 +48,13 @@ FairMot::FairMot(const std::string &rModelPath, const double frameRate,
       mLostStracks(),
       mTrackedStracks(),
       mRemoveStracks() {
+  FLAGS_torch_jit_enable_new_executor = false;
+  torch::jit::getProfilingMode() = false;
+  torch::jit::getExecutorMode() = false;
+  torch::jit::FusionStrategy fusion_strategy = {
+      {torch::jit::FusionBehavior::DYNAMIC, 1}};
+  torch::jit::setFusionStrategy(fusion_strategy);
+
   torch::DeviceType device_type;
   if (torch::cuda::is_available()) {
     std::cout << "Using CUDA." << std::endl;
@@ -41,7 +65,9 @@ FairMot::FairMot(const std::string &rModelPath, const double frameRate,
   }
 
   mpDevice = new torch::Device(device_type);
+  mModel = torch::jit::optimize_for_inference(mModel);
   mModel.to(*mpDevice);
+  this->WarmUp();
 }
 
 FairMot::~FairMot() { delete mpDevice; }
@@ -49,7 +75,6 @@ FairMot::~FairMot() { delete mpDevice; }
 std::pair<torch::Tensor, torch::Tensor> FairMot::Predict(
     const cv::Mat &rPaddedImage, const cv::Mat &rImage) {
   namespace F = torch::nn::functional;
-  torch::NoGradGuard no_grad;
 
   auto image_tensor = torch::from_blob(
       rPaddedImage.data, {mInputHeight, mInputWidth, 3}, torch::kFloat32);
@@ -79,6 +104,7 @@ std::pair<torch::Tensor, torch::Tensor> FairMot::Predict(
 }
 
 std::vector<TrackOutput> FairMot::Track(const cv::Mat &rImage) {
+  c10::InferenceMode guard;
   auto padded_image = this->Preprocess(rImage);
   torch::Tensor detections;
   torch::Tensor embeddings;
@@ -146,7 +172,6 @@ std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
   strack_pool = strack_util::CombineStracks(tracked_stracks, mLostStracks);
   // Predict the current location with KF
   STrack::MultiPredict(strack_pool);
-  if (verbose) std::cout << "strack_pool " << strack_pool << std::endl;
 
   // The dists is a matrix of distances of the detection with the tracks
   // in strack_pool
@@ -334,13 +359,23 @@ std::vector<TrackOutput> FairMot::Postprocess(
   return results;
 }
 
-cv::Mat FairMot::Preprocess(cv::Mat image) {
-  auto padded_image = util::Letterbox(image, mInputHeight, mInputWidth);
+cv::Mat FairMot::Preprocess(const cv::Mat &rImage) {
+  auto padded_image = util::Letterbox(rImage, mInputHeight, mInputWidth);
 
   cv::cvtColor(padded_image, padded_image, cv::COLOR_BGR2RGB);
   padded_image.convertTo(padded_image, CV_32FC3);
   padded_image /= 255.0;
 
   return padded_image;
+}
+
+void FairMot::WarmUp() {
+  auto image_tensor = torch::zeros({1, 3, mInputHeight, mInputWidth},
+                                   torch::TensorOptions()
+                                       .dtype(torch::kFloat32)
+                                       .device(*mpDevice)
+                                       .requires_grad(false));
+  std::vector<torch::jit::IValue> inputs = {image_tensor};
+  mModel.forward(inputs);
 }
 }  // namespace fairmot

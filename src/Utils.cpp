@@ -135,8 +135,8 @@ float Lap(const std::vector<float> &rCost, const int numRows, const int numCols,
   return opt;
 }
 
-cv::Mat Letterbox(cv::Mat image, int targetHeight, int targetWidth) {
-  auto shape = image.size();
+cv::Mat Letterbox(const cv::Mat &rImage, int targetHeight, int targetWidth) {
+  auto shape = rImage.size();
   auto height = static_cast<double>(shape.height);
   auto width = static_cast<double>(shape.width);
   auto ratio = std::min(static_cast<double>(targetHeight) / height,
@@ -151,7 +151,8 @@ cv::Mat Letterbox(cv::Mat image, int targetHeight, int targetWidth) {
   int left = std::round(width_padding - 0.1);
   int right = std::round(width_padding + 0.1);
 
-  cv::resize(image, image, new_shape, cv::INTER_AREA);
+  cv::Mat image;
+  cv::resize(rImage, image, new_shape, 0.0, 0.0, cv::INTER_AREA);
   cv::copyMakeBorder(image, image, top, bottom, left, right,
                      cv::BORDER_CONSTANT, cv::Scalar(127.5, 127.5, 127.5));
 
