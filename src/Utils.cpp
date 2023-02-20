@@ -161,21 +161,18 @@ cv::Mat Letterbox(const cv::Mat &rImage, int targetHeight, int targetWidth) {
 
 void TransformCoords(torch::Tensor &rCoords, const Vec2D<double> &rCenter,
                      const double scale, const Vec2D<int> &rOutputSize) {
-  const auto matrix = GetAffineTransform(rCenter, scale, /*rot=*/0, rOutputSize,
-                                         /*rShift=*/{0.0, 0.0}, /*inv=*/true);
-  auto x1 = rCoords.select(1, 0).contiguous();
-  auto y1 = rCoords.select(1, 1).contiguous();
-  auto x2 = rCoords.select(1, 2).contiguous();
-  auto y2 = rCoords.select(1, 3).contiguous();
-
-  rCoords.select(1, 0) = matrix.at<double>(0, 0) * x1 +
-                         matrix.at<double>(0, 1) * y1 + matrix.at<double>(0, 2);
-  rCoords.select(1, 1) = matrix.at<double>(1, 0) * x1 +
-                         matrix.at<double>(1, 1) * y1 + matrix.at<double>(1, 2);
-  rCoords.select(1, 2) = matrix.at<double>(0, 0) * x2 +
-                         matrix.at<double>(0, 1) * y2 + matrix.at<double>(0, 2);
-  rCoords.select(1, 3) = matrix.at<double>(1, 0) * x2 +
-                         matrix.at<double>(1, 1) * y2 + matrix.at<double>(1, 2);
+  auto matrix = GetAffineTransform(rCenter, scale, /*rot=*/0, rOutputSize,
+                                   /*rShift=*/{0.0, 0.0}, /*inv=*/true);
+  matrix = matrix.t();
+  auto mat =
+      torch::from_blob(matrix.data, {matrix.rows, matrix.cols}, torch::kDouble)
+          .to(torch::kFloat32);
+  auto xy1 = rCoords.slice(1, 0, 2).contiguous();
+  auto xy2 = rCoords.slice(1, 2, 4).contiguous();
+  rCoords.slice(1, 0, 2) =
+      torch::matmul(xy1, mat.slice(0, 0, 2)) + mat.select(0, 2);
+  rCoords.slice(1, 2, 4) =
+      torch::matmul(xy2, mat.slice(0, 0, 2)) + mat.select(0, 2);
 }
 
 torch::Tensor TransposeAndGatherFeat(const torch::Tensor &rFeat,

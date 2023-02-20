@@ -51,10 +51,11 @@ void Decoder::CtdetPostProcess(torch::Tensor &rDetections,
                                const Vec2D<int> &rOutputSize) {
   auto coords = rDetections.slice(1, 0, 4);
   util::TransformCoords(coords, rCenter, scale, rOutputSize);
-  // TODO: Check if masking by class is really necessary
-  const auto mask =
-      torch::nonzero(rDetections.select(1, 5).to(torch::kInt64) == 0).squeeze();
-  rDetections = rDetections.slice(1, 0, 5).index_select(0, mask);
+  // Filter by class == 0 is unnecessary
+  // const auto mask =
+  //     torch::nonzero(rDetections.select(1, 5).to(torch::kInt64) ==
+  //     0).squeeze();
+  // rDetections = rDetections.slice(1, 0, 5).index_select(0, mask);
 }
 
 torch::Tensor Decoder::Nms(const torch::Tensor &rHeatmap, const int kernel) {
@@ -75,7 +76,7 @@ torch::Tensor Decoder::PostProcess(const torch::Tensor &rDetections,
   const auto input_h = static_cast<double>(rInputShape[2]);
   const auto input_w = static_cast<double>(rInputShape[3]);
   auto detections_cpu =
-      rDetections.to(torch::kCPU).view({1, -1, rDetections.size(2)}).squeeze(0);
+      rDetections.view({1, -1, rDetections.size(2)}).squeeze(0).to(torch::kCPU);
   this->CtdetPostProcess(detections_cpu, {orig_w / 2.0, orig_h / 2.0},
                          std::max(input_w / input_h * orig_h, orig_w),
                          {static_cast<int>(input_w) / mDownRatio,
