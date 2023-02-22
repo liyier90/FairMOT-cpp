@@ -20,20 +20,6 @@
 #include "STrack.hpp"
 #include "Utils.hpp"
 
-class Timer {
- public:
-  void Tic() { mStartTime = std::chrono::high_resolution_clock::now(); }
-  void Toc(const char *pStage) {
-    mEndTime = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> elapsed = mEndTime - mStartTime;
-    std::cout << pStage << " " << elapsed.count() << std::endl;
-  }
-
- private:
-  std::chrono::system_clock::time_point mStartTime;
-  std::chrono::system_clock::time_point mEndTime;
-};
-
 namespace fairmot {
 FairMot::FairMot(const std::string &rModelPath, const double frameRate,
                  const int maxPerImage, const int trackBuffer)
@@ -117,12 +103,7 @@ std::vector<TrackOutput> FairMot::Track(const cv::Mat &rImage) {
 
 std::vector<STrack> FairMot::Update(const torch::Tensor &rDetections,
                                     const torch::Tensor &rEmbeddings) {
-  auto verbose = false;
   ++mFrameId;
-  if (verbose && mFrameId == 4) {
-    exit(1);
-  }
-  if (verbose) std::cout << "=== mFrameId: " << mFrameId << std::endl;
 
   std::vector<STrackPtr> activated_stracks;
   std::vector<STrackPtr> refind_stracks;
