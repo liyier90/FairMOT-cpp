@@ -105,8 +105,14 @@ _Other than Eigen, older versions for the dependencies may also work._
 
 ## Tracking performance
 
-_Evaluating on `train` subset._
+Results on MOT challenge _train_ set.
 
 | Dataset | MOTA | IDF1 | IDS | MT  | ML  | FPS  |
 | ------- | ---- | ---- | --- | --- | --- | ---- |
 | MOT-16  | 81.8 | 80.6 | 519 | 303 | 27  | 30.1 |
+
+_Evaluation was run on NVIDIA GeForce RTX 3070 8GB._
+
+## Demo
+
+<img src="/assets/demo.gif" />
