@@ -38,7 +38,6 @@ if (FairMOT_PROFILE)
 endif ()
 
 set(SOURCES
-    src/main.cpp
     src/Decoder.cpp
     src/FairMot.cpp
     src/KalmanFilter.cpp
@@ -47,12 +46,27 @@ set(SOURCES
     src/Utils.cpp
 )
 
+if (FairMOT_EVAL)
+    set(SOURCES
+        ${SOURCES}
+        src/main_eval.cpp
+    )
+else ()
+    set(SOURCES
+        ${SOURCES}
+        src/main.cpp
+    )
+endif ()
+
+
+
 add_executable(FairMOT ${SOURCES})
 
 include_directories(${OpenCV_INCLUDE_DIRS})
 target_include_directories(FairMOT
     PRIVATE
         ${PROJECT_SOURCE_DIR}/src
+        ${PROJECT_SOURCE_DIR}/third_party/mini
 )
 target_link_libraries(FairMOT
     stdc++fs

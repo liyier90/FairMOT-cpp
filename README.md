@@ -102,3 +102,11 @@ _Other than Eigen, older versions for the dependencies may also work._
    ```
    ./FairMOT </path/to/video/file>
    ```
+
+## Tracking performance
+
+_Evaluating on `train` subset._
+
+| Dataset | MOTA | IDF1 | IDS | MT  | ML  | FPS  |
+| ------- | ---- | ---- | --- | --- | --- | ---- |
+| MOT-16  | 81.8 | 80.6 | 519 | 303 | 27  | 30.1 |
